@@ -6,27 +6,6 @@ source("/Users/xiaodanqi/Desktop/code/【danqi】ltrc-changepoint-main/code/save
 setwd("/Users/xiaodanqi/Desktop/code/【danqi】ltrc-changepoint-main")
 source("/Users/xiaodanqi/Desktop/code/【danqi】ltrc-changepoint-main/estimation/plot_baseline.R")
 
-set.seed(123)
-
-data_pilot <- TimeindepLTRC_gnrt_ChangepointPH(
-  N = 5000,
-  Distribution = SIM_CONFIG$Distribution,
-  eta = SIM_CONFIG$eta,
-  Beta = SIM_CONFIG$Beta,
-  Gamma = SIM_CONFIG$Gamma,
-  truncation.percent = SIM_CONFIG$truncation,
-  censor.percent = SIM_CONFIG$censor,
-  x1.mean = SIM_CONFIG$x1.mean,
-  x1.sd   = SIM_CONFIG$x1.sd,
-  x2.mean = SIM_CONFIG$x2.mean,
-  x2.sd   = SIM_CONFIG$x2.sd,
-  adjust.censor = TRUE
-)$Data
-
-knots_fixed <- select_knots(data_pilot, p = SIM_CONFIG$p)
-
-cat("Fixed knots:", paste(knots_fixed, collapse = ", "), "\n")
-
 
 # 参数组合
 n_list <- c(300, 500)
@@ -53,7 +32,7 @@ for(i in 1:nrow(exp_grid)) {
       ", censor =", SIM_CONFIG$censor, "\n")
 
   # 运行仿真
-  res <- run_simulation(SIM_CONFIG, knots_fixed)
+  res <- run_simulation(SIM_CONFIG)
 
   # 计算感兴趣参数索引
   p <- SIM_CONFIG$p

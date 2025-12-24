@@ -60,7 +60,7 @@ get_true_baseline <- function(config) {
 }
 
 ##################### Monte Carlo 仿真 #####################
-run_simulation <- function(config, knots_fixed) {
+run_simulation <- function(config) {
   true_base <- get_true_baseline(config) # 生成真实基准基线函数
   config$S0_true <- true_base$S0_true
   config$H0_true <- true_base$H0_true
@@ -90,11 +90,7 @@ run_simulation <- function(config, knots_fixed) {
       adjust.censor = TRUE
     )$Data # 生成数据
 
-    fit <- fit_piecewise(
-      dat,
-      p = config$p,
-      knots_fixed = knots_fixed
-    ) # 模型拟合
+    fit <- fit_piecewise(dat, p = config$p) # 模型拟合
     theta_hat <- fit$par
 
     par_mat <- rbind(par_mat, theta_hat)  # 储存参数估计

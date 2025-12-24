@@ -1,7 +1,7 @@
 SIM_CONFIG <- list(
 
   ## ========= Monte Carlo =========
-  B = 100,
+  B = 200,
   n = 300,
   Distribution = "Exp",
   truncation = 0.1, # 10%, 30%
@@ -16,7 +16,7 @@ SIM_CONFIG <- list(
   p = 2,
   eta = 2,  # 变点参数
   Beta = c(-1,-1), # 变点前的回归系数 (β₁, β₂)
-  Gamma = c(2,1),  # 变点后的效应变化量
+  Gamma = c(2,1),  # 变点后的效应变化量 (γ₁, γ₂)
 
   ## ========= 协变量分布 =========
   x1.mean = 2,

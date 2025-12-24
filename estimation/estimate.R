@@ -195,7 +195,7 @@ select_knots <- function(data, p, quantiles = c(0.2,0.4,0.6,0.8)) {
         if (K <= 0) next
 
         init <- c(
-            rep(0.5, 2*p),
+            rep(0.8, 2*p),
             rep(0.1, K)
         ) # 初值
 
@@ -244,14 +244,10 @@ select_knots <- function(data, p, quantiles = c(0.2,0.4,0.6,0.8)) {
 }
 
 #####################主函数：拟合分段线性基准风险模型#######################
-fit_piecewise <- function(data_input, p,  knots_fixed = NULL) {
+fit_piecewise <- function(data_input, p) {
 
-  ## 1.使用固定分割点
-  if (is.null(knots_fixed)) {
-    knots <- select_knots(data_input, p)
-  } else {
-    knots <- knots_fixed
-  }
+  ## 1. 选择最佳分割点
+  knots <- select_knots(data_input, p)
   K <- length(knots) - 1
 
   if (K <= 0) {

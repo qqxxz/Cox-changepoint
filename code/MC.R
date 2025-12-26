@@ -66,8 +66,7 @@ run_simulation <- function(config) {
   config$H0_true <- true_base$H0_true
 
   B <- config$B
-  par_mat <- NULL # 初始化
-  se_mat  <- NULL  
+  par_mat <- NULL # 初始化  
   AIE_SF_vec  <- numeric(B)
   AIE_CHF_vec <- numeric(B)
   b_mat <- NULL
@@ -96,10 +95,6 @@ run_simulation <- function(config) {
     par_mat <- rbind(par_mat, theta_hat)  # 储存参数估计
     b_mat <- rbind(b_mat, fit$b)
 
-    # 用 Monte Carlo SD 替代 Hessian SE
-    se_mat <- matrix(apply(par_mat, 2, sd), nrow = B, ncol = ncol(par_mat), byrow = TRUE)
-
-
     tgrid <- seq(min(dat$Stop), max(dat$Stop), length.out = 200) # 构造时间网格
 
     AIE_SF_vec[b]  <- compute_AIE_SF(fit, dat, config)
@@ -117,7 +112,6 @@ run_simulation <- function(config) {
 
   list(
     par_mat = par_mat,
-    se_mat  = se_mat,
     AIE_SF  = AIE_SF_vec,
     AIE_CHF = AIE_CHF_vec,
     AIE_SF_MC  = mean(AIE_SF_vec,  na.rm = TRUE),
@@ -126,11 +120,11 @@ run_simulation <- function(config) {
 }
 
 ##################### 仿真统计量 #####################
-summary_MC <- function(par_mat, se_mat, true_par) {
+summary_MC <- function(par_mat, true_par) {
     stopifnot(
-    ncol(par_mat) == length(true_par),
-    all(dim(par_mat) == dim(se_mat))
+    ncol(par_mat) == length(true_par)
   ) # 确保维度一致
+
   est_mean <- colMeans(par_mat)
   bias <- est_mean - true_par
   sse <- colMeans((par_mat - matrix(true_par,
@@ -144,14 +138,19 @@ summary_MC <- function(par_mat, se_mat, true_par) {
   CP95 <- CP99 <- rep(NA, ncol(par_mat))
 
   for (j in 1:ncol(par_mat)) {
-    se_j <- sd(par_mat[, j])
+
     CP95[j] <- mean(
-      abs(par_mat[, j] - true_par[j]) <= qnorm(0.975) * se_mat[, j]
+      abs(par_mat[, j] - true_par[j]) <= qnorm(0.975) * see[j],
+      na.rm = TRUE
     )
+
     CP99[j] <- mean(
-      abs(par_mat[, j] - true_par[j]) <= qnorm(0.995) * se_mat[, j]
+      abs(par_mat[, j] - true_par[j]) <= qnorm(0.995) * see[j],
+      na.rm = TRUE
     )
   }
+
+
 
   return(data.frame(
     Estimate = est_mean,

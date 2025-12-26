@@ -64,7 +64,11 @@ neg_loglik_profile <- function(par, data_input, knots, p, eta) {
   T0 <- data_input$Start # 左删失时间
   delta <- data_input$Event # 事件指示变量
 
-  ind <- as.numeric(data_input$X1 > eta) # 变点指示变量
+  n <- nrow(data_input)
+  h <- 1.2 * sd(data_input$X1) * n^(-1/3)
+  ind <- plogis((data_input$X1 - eta) / h) # 平滑eta➡️平滑likelihood
+  # ind <- as.numeric(data_input$X1 > eta) # 变点指示变量
+
   psi <- as.vector(X %*% beta + (Xt %*% gamma) * ind) 
   psi <- pmin(pmax(psi, -20), 20)  # 限制范围
   mZ <- m0(Z, b, knots)
@@ -87,8 +91,8 @@ fit_given_eta <- function(data, knots, p, eta) {
   K <- length(knots) - 1
 
   init <- c(
-    rep(0, 2*p),        # beta, gamma
-    rep(0.1 * runif(1,0.5,1.5), K)    # log(b)
+    rep(0.8, 2*p),        # beta, gamma 0
+    rep(0.1 * runif(1,0.5,1.5), K)    # log(b) 0.1
   )
 
   fit <- optim(
@@ -196,7 +200,7 @@ select_knots <- function(data, p, quantiles = c(0.2,0.4,0.6,0.8)) {
 
         init <- c(
             rep(0.8, 2*p),
-            rep(0.1, K)
+            rep(0.1 * runif(1,0.5,1.5), K)
         ) # 初值
 
         eta_tmp <- median(data$X1, na.rm = TRUE) # 固定 eta
@@ -297,7 +301,7 @@ fit_piecewise <- function(data_input, p) {
   logLik_val <- -best_val
   AIC_val <- 2 * (length(par_inner) + 1) - 2 * logLik_val
   # +1 是 eta
-
+ 
   ## 6. 返回
   return(list(
     par   = c(par_inner, eta),
@@ -338,8 +342,9 @@ compute_AIE_SF <- function(fit_result, data, config) {
     
     # 数值积分计算绝对误差
     dt <- diff(tgrid)[1]
-    integral <- sum(abs(S_hat - S_true)) * dt
-    
+    eps <- 1e-6
+    integral <- sum(abs(S_hat - S_true) / pmax(S_true, eps)) * dt
+
     # 除以观测范围长度
     range_len <- Z_max - Z_min
     if (range_len < 1e-10) return(NA)
@@ -368,8 +373,9 @@ compute_AIE_CHF <- function(fit_result, data, config) {
     
     # 数值积分
     dt <- diff(tgrid)[1]
-    integral <- sum(abs(H_hat - H_true)) * dt
-    
+    eps <- 1e-6
+    integral <- sum(abs(H_hat - H_true) / pmax(H_true, eps)) * dt
+
     # 除以观测范围长度
     range_len <- Z_max - Z_min
     if (range_len < 1e-10) return(NA)

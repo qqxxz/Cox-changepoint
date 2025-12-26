@@ -44,7 +44,7 @@ for(i in 1:nrow(exp_grid)) {
   true_par <- c(SIM_CONFIG$Beta, SIM_CONFIG$Gamma, SIM_CONFIG$eta)
 
   # 统计总结
-  summary_res <- summary_MC(par_mat_interest, se_mat_interest, true_par)
+  summary_res <- summary_MC(par_mat_interest,true_par)
 
   # 保存 Excel
   save_MC_to_excel(

@@ -1,10 +1,10 @@
-source("/Users/xiaodanqi/Desktop/code/【danqi】ltrc-changepoint-main/data/TimeindepLTRC_gnrt_ChangepointPH.R")
-source("/Users/xiaodanqi/Desktop/code/【danqi】ltrc-changepoint-main/estimation/estimate.R")
-source("/Users/xiaodanqi/Desktop/code/【danqi】ltrc-changepoint-main/code/MC.R")
-source("/Users/xiaodanqi/Desktop/code/【danqi】ltrc-changepoint-main/code/config.R")
-source("/Users/xiaodanqi/Desktop/code/【danqi】ltrc-changepoint-main/code/save.R")
-setwd("/Users/xiaodanqi/Desktop/code/【danqi】ltrc-changepoint-main")
-source("/Users/xiaodanqi/Desktop/code/【danqi】ltrc-changepoint-main/estimation/plot_baseline.R")
+source("/Users/xiaodanqi/Desktop/LTRC-changepoint/data/TimeindepLTRC_gnrt_ChangepointPH.R")
+source("/Users/xiaodanqi/Desktop/LTRC-changepoint/estimation/estimate.R")
+source("/Users/xiaodanqi/Desktop/LTRC-changepoint/code/MC.R")
+source("/Users/xiaodanqi/Desktop/LTRC-changepoint/code/config.R")
+source("/Users/xiaodanqi/Desktop/LTRC-changepoint/code/save.R")
+setwd("/Users/xiaodanqi/Desktop/LTRC-changepoint/")
+source("/Users/xiaodanqi/Desktop/LTRC-changepoint/estimation/plot_baseline.R")
 
 
 # 参数组合
@@ -51,7 +51,7 @@ for(i in 1:nrow(exp_grid)) {
     res        = res,
     config     = SIM_CONFIG,
     true_par   = true_par,
-    out_dir    = "/Users/xiaodanqi/Desktop/code/【danqi】ltrc-changepoint-main/results",
+    out_dir    = "/Users/xiaodanqi/Desktop/LTRC-changepoint/results",
     summary_df = summary_res
   )
 

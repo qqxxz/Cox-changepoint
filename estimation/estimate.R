@@ -91,7 +91,7 @@ fit_given_eta <- function(data, knots, p, eta) {
   K <- length(knots) - 1
 
   init <- c(
-    rep(0.8, 2*p),        # beta, gamma 0
+    rep(1, 2*p),        # beta, gamma 0 0.8➡️1
     rep(0.1 * runif(1,0.5,1.5), K)    # log(b) 0.1
   )
 
@@ -199,7 +199,7 @@ select_knots <- function(data, p, quantiles = c(0.2,0.4,0.6,0.8)) {
         if (K <= 0) next
 
         init <- c(
-            rep(0.8, 2*p),
+            rep(1, 2*p),  # 0.8➡️1
             rep(0.1 * runif(1,0.5,1.5), K)
         ) # 初值
 

@@ -13,7 +13,7 @@ K <- ncol(res$par_mat) - (2*p + 1)
 
 idx_interest <- c(
   1:p,  # beta
-  (p+1):(2*p),  # gamma
+  (p+1):(2*p),  # gamma 
   (2*p + K + 1)  # eta
 )
 

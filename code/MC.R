@@ -1,3 +1,7 @@
+library(parallel)
+ncore <- detectCores() - 1  # 留一个核给系统
+
+
 get_true_baseline <- function(config) {
 
   if (config$Distribution == "Exp") {
@@ -61,17 +65,13 @@ get_true_baseline <- function(config) {
 
 ##################### Monte Carlo 仿真 #####################
 run_simulation <- function(config) {
-  true_base <- get_true_baseline(config) # 生成真实基准基线函数
+  true_base <- get_true_baseline(config)
   config$S0_true <- true_base$S0_true
   config$H0_true <- true_base$H0_true
 
   B <- config$B
-  par_mat <- NULL # 初始化  
-  AIE_SF_vec  <- numeric(B)
-  AIE_CHF_vec <- numeric(B)
-  b_mat <- NULL
 
-  for (b in 1:B) {
+  one_rep <- function(b) {
     cat("Replication:", b, "\n")
 
     dat <- TimeindepLTRC_gnrt_ChangepointPH(
@@ -87,27 +87,38 @@ run_simulation <- function(config) {
       x2.mean = config$x2.mean,
       x2.sd   = config$x2.sd,
       adjust.censor = TRUE
-    )$Data # 生成数据
+    )$Data
 
-    fit <- fit_piecewise(dat, p = config$p) # 模型拟合
-    theta_hat <- fit$par
+    fit <- fit_piecewise(dat, p = config$p)
 
-    par_mat <- rbind(par_mat, theta_hat)  # 储存参数估计
-    b_mat <- rbind(b_mat, fit$b)
-
-    tgrid <- seq(min(dat$Stop), max(dat$Stop), length.out = 200) # 构造时间网格
-
-    AIE_SF_vec[b]  <- compute_AIE_SF(fit, dat, config)
-    AIE_CHF_vec[b] <- compute_AIE_CHF(fit, dat, config)
+    list(
+      par = fit$par,
+      b   = fit$b,
+      AIE_SF  = compute_AIE_SF(fit, dat, config),
+      AIE_CHF = compute_AIE_CHF(fit, dat, config),
+      knots = fit$knots,
+      data  = dat
+    )
   }
 
+  res_list <- mclapply(1:B, one_rep, mc.cores = ncore)
+
+  par_mat <- do.call(rbind, lapply(res_list, `[[`, "par"))
+  b_mat   <- do.call(rbind, lapply(res_list, `[[`, "b"))
+  AIE_SF_vec  <- sapply(res_list, `[[`, "AIE_SF")
+  AIE_CHF_vec <- sapply(res_list, `[[`, "AIE_CHF")
+
   b_mean <- colMeans(b_mat, na.rm = TRUE)
+
+  # 用最后一次的 knots / data 画图即可
   plot_baseline_CHF(
     b_mean  = b_mean,
-    knots   = fit$knots,
-    data    = dat,
+    knots   = res_list[[1]]$knots,
+    data    = res_list[[1]]$data,
     config  = config,
-    file    = "baseline_CHF.png"
+    file = paste0("baseline_CHF_n", config$n,
+              "_tr", config$truncation,
+              "_c", config$censor, ".png")
   )
 
   list(

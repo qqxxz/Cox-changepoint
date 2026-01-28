@@ -6,7 +6,7 @@ source("/Users/xiaodanqi/Desktop/LTRC-changepoint/code/save.R")
 setwd("/Users/xiaodanqi/Desktop/LTRC-changepoint/")
 source("/Users/xiaodanqi/Desktop/LTRC-changepoint/estimation/plot_baseline.R")
 
-
+set.seed(66)
 # 参数组合
 n_list <- c(300, 500)
 trunc_list <- c(0.1, 0.3)

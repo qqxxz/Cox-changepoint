@@ -162,12 +162,9 @@ single_cp_test_score <- function(data, config) {
 MC_changepoint_test <- function(config) {
 
   B_mc <- config$B
+  alpha_vec <- config$alpha
 
-  SUP_obs_vec  <- numeric(B_mc)
-  pval_vec <- numeric(B_mc)
-  reject_mat  <- matrix(0, nrow=B_mc, ncol=length(config$alpha))
-
-  for (b in 1:B_mc) {
+  one_run <- function(b) {
 
     cat("MC replication:", b, "\n")
 
@@ -176,7 +173,7 @@ MC_changepoint_test <- function(config) {
       Distribution = config$Distribution,
       eta = config$eta,
       Beta = config$Beta,
-      Gamma = config$Gamma,   # 这里控制是否真有变点
+      Gamma = config$Gamma,
       truncation.percent = config$truncation,
       censor.percent = config$censor,
       x1.mean = config$x1.mean,
@@ -186,20 +183,27 @@ MC_changepoint_test <- function(config) {
       adjust.censor = TRUE
     )$Data
 
-    # 调用置换检验函数,得到置换分布
     test_res <- single_cp_test_score(dat, config)
 
-    SUP_obs_vec[b] <- test_res$SUP_obs
-    pval_vec[b] <- mean(test_res$sup_perm >= test_res$SUP_obs)
+    SUP_obs <- test_res$SUP_obs
+    pval    <- mean(test_res$sup_perm >= SUP_obs)
+    reject  <- as.numeric(SUP_obs > test_res$crit)
 
-    # 判断是否拒绝 H0
-    for (j in seq_along(config$alpha)) {
-      reject_mat[b, j] <- as.numeric(test_res$SUP_obs > test_res$crit[j])
-    }
+    list(
+      SUP = SUP_obs,
+      pval = pval,
+      reject = reject
+    )
   }
-  # 计算每个 α 的拒绝率
+
+  res_list <- mclapply(1:B_mc, one_run, mc.cores = ncore)
+
+  SUP_obs_vec <- sapply(res_list, `[[`, "SUP")
+  pval_vec    <- sapply(res_list, `[[`, "pval")
+  reject_mat  <- do.call(rbind, lapply(res_list, `[[`, "reject"))
+
   Rejection_Rate <- colMeans(reject_mat)
-  names(Rejection_Rate) <- paste0("alpha=", config$alpha)
+  names(Rejection_Rate) <- paste0("alpha=", alpha_vec)
 
   list(
     SUP = SUP_obs_vec,

@@ -7,7 +7,7 @@ setwd("/Users/xiaodanqi/Desktop/LTRC-changepoint/")
 source("/Users/xiaodanqi/Desktop/LTRC-changepoint/estimation/plot_baseline.R")
 source("/Users/xiaodanqi/Desktop/LTRC-changepoint/test/hypothesis_test.R")
 source("/Users/xiaodanqi/Desktop/LTRC-changepoint/code/config.R")
-set.seed(123)
+set.seed(66)
 library(openxlsx)
 
 param_grid <- expand.grid(

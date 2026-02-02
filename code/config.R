@@ -1,7 +1,7 @@
 SIM_CONFIG <- list(
 
   ## ========= Monte Carlo =========
-  B = 300,
+  B = 1000,
   n = 300,
   Distribution = "Exp",
   truncation = 0.1, # 10%, 30%
@@ -30,8 +30,10 @@ SIM_CONFIG <- list(
   B_perm = 1000,           # 每次检验的置换次数
 
   ## ========= 显著性水平 =========
-  alpha = c(0.10, 0.05, 0.01)
+  alpha = c(0.10, 0.05, 0.01),
 
-
+  ## ========= RNG 控制 =========
+  base_seed = 123,
+  seed_multiplier = 4567
 )
 

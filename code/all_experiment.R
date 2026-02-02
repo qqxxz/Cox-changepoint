@@ -6,7 +6,7 @@ source("/Users/xiaodanqi/Desktop/LTRC-changepoint/code/save.R")
 setwd("/Users/xiaodanqi/Desktop/LTRC-changepoint/")
 source("/Users/xiaodanqi/Desktop/LTRC-changepoint/estimation/plot_baseline.R")
 
-set.seed(66)
+
 # 参数组合
 n_list <- c(300, 500)
 trunc_list <- c(0.1, 0.3)
@@ -21,6 +21,11 @@ exp_grid <- expand.grid(
 results_all <- list()  # 保存每次实验结果
 
 for(i in 1:nrow(exp_grid)) {
+
+  cat("====================================\n")
+  cat("Experiment", i, "of", nrow(exp_grid), "\n")
+  
+  SIM_CONFIG$exp_id <- i   # 控制不同实验的随机数
 
   # 更新 SIM_CONFIG
   SIM_CONFIG$n <- exp_grid$n[i]
@@ -40,7 +45,7 @@ for(i in 1:nrow(exp_grid)) {
   idx_interest <- c(1:p, (p+1):(2*p), (2*p + K + 1))
 
   par_mat_interest <- res$par_mat[, idx_interest]
-  se_mat_interest  <- res$se_mat[, idx_interest]
+  # se_mat_interest  <- res$se_mat[, idx_interest]
   true_par <- c(SIM_CONFIG$Beta, SIM_CONFIG$Gamma, SIM_CONFIG$eta)
 
   # 统计总结

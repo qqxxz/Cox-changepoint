@@ -72,7 +72,15 @@ run_simulation <- function(config) {
   B <- config$B
 
   one_rep <- function(b) {
-    cat("Replication:", b, "\n")
+
+    ## ====== 每个 MC replication 独立随机种子 ======
+    mc_seed <- config$base_seed +
+              config$seed_multiplier * b + 
+              987 * config$exp_id
+
+    set.seed(mc_seed)
+
+    cat("Replication:", b, " Seed =", mc_seed, "\n")
 
     dat <- TimeindepLTRC_gnrt_ChangepointPH(
       N = config$n,

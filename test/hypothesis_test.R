@@ -166,7 +166,18 @@ MC_changepoint_test <- function(config) {
 
   one_run <- function(b) {
 
-    cat("MC replication:", b, "\n")
+    # Type I / Power 不互相污染
+    gamma_tag <- sum(abs(config$Gamma))  # 0 for null, >0 for power
+
+    # ===== 每次 MC replication 单独设随机种子 =====
+    mc_seed <- config$base_seed +  # 全局起点
+              config$seed_multiplier * b +  # mc循环不同随机种子
+              987 * config$test_id +  # type and power 不同随机种子
+              654 * config$exp_id # 不同实验不同随机种子
+
+    set.seed(mc_seed)
+
+    cat("MC replication:", b, " seed =", mc_seed, "\n")
 
     dat <- TimeindepLTRC_gnrt_ChangepointPH(
       N = config$n,
@@ -251,7 +262,7 @@ run_MC_test <- function(config, gamma_vec, out_dir="results") {
     "_n=", config$n,
     "_LT=", config$truncation,
     "_C=", config$censor,
-    "_Gamma=", paste(round(gamma_vec,2), collapse="-"),
+    "_Gamma=", paste(round(gamma_vec,2), collapse="_"),
     "_B=", config$B, ".xlsx"
   )
   

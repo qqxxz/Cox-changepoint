@@ -1,19 +1,19 @@
-source("/Users/xiaodanqi/Desktop/LTRC-changepoint/data/TimeindepLTRC_gnrt_ChangepointPH.R")
-source("/Users/xiaodanqi/Desktop/LTRC-changepoint/estimation/estimate.R")
-source("/Users/xiaodanqi/Desktop/LTRC-changepoint/code/MC.R")
-source("/Users/xiaodanqi/Desktop/LTRC-changepoint/code/config.R")
-source("/Users/xiaodanqi/Desktop/LTRC-changepoint/code/save.R")
-setwd("/Users/xiaodanqi/Desktop/LTRC-changepoint/")
-source("/Users/xiaodanqi/Desktop/LTRC-changepoint/estimation/plot_baseline.R")
-source("/Users/xiaodanqi/Desktop/LTRC-changepoint/test/hypothesis_test.R")
-source("/Users/xiaodanqi/Desktop/LTRC-changepoint/code/config.R")
-set.seed(456)
+source("E:/BNU/BA4/毕业论文/LTRC-changepoint/data/TimeindepLTRC_gnrt_ChangepointPH.R")
+source("E:/BNU/BA4/毕业论文/LTRC-changepoint/estimation/estimate.R")
+source("E:/BNU/BA4/毕业论文/LTRC-changepoint/code/MC.R")
+source("E:/BNU/BA4/毕业论文/LTRC-changepoint/code/config.R")
+source("E:/BNU/BA4/毕业论文/LTRC-changepoint/code/save.R")
+setwd("E:/BNU/BA4/毕业论文/LTRC-changepoint/")
+source("E:/BNU/BA4/毕业论文/LTRC-changepoint/estimation/plot_baseline.R")
+source("E:/BNU/BA4/毕业论文/LTRC-changepoint/test/hypothesis_test.R")
+source("E:/BNU/BA4/毕业论文/LTRC-changepoint/code/config.R")
+
 library(openxlsx)
 
 param_grid <- expand.grid(
-  n = c(300,500),
-  truncation = c(0.1, 0.3),
-  censor = c(0.2, 0.4)
+  n = c(500),
+  truncation = c(0.3),
+  censor = c(0.2)
 )
 
 all_results <- list()

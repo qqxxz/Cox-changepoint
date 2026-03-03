@@ -109,7 +109,36 @@ run_simulation <- function(config) {
     )
   }
 
-  res_list <- mclapply(1:B, one_rep, mc.cores = ncore)
+
+  ### ===== 跨平台并行 =====
+  if (.Platform$OS.type == "windows") {
+
+    cl <- parallel::makeCluster(ncore)
+
+    project_dir <- "E:/BNU/BA4/毕业论文/LTRC-changepoint"
+
+    parallel::clusterEvalQ(cl, {
+      source("E:/BNU/BA4/毕业论文/LTRC-changepoint/data/TimeindepLTRC_gnrt_ChangepointPH.R")
+      source("E:/BNU/BA4/毕业论文/LTRC-changepoint/estimation/estimate.R")
+      source("E:/BNU/BA4/毕业论文/LTRC-changepoint/code/MC.R")
+      source("E:/BNU/BA4/毕业论文/LTRC-changepoint/code/config.R")
+      source("E:/BNU/BA4/毕业论文/LTRC-changepoint/code/save.R")
+      setwd("E:/BNU/BA4/毕业论文/LTRC-changepoint")
+      source("E:/BNU/BA4/毕业论文/LTRC-changepoint/estimation/plot_baseline.R")
+
+    })
+
+    parallel::clusterExport(cl, varlist = c("config"), envir = environment())
+
+    res_list <- parallel::parLapply(cl, 1:B, one_rep)
+
+    parallel::stopCluster(cl)
+
+  } else {
+
+    res_list <- parallel::mclapply(1:B, one_rep, mc.cores = ncore)
+
+  }
 
   par_mat <- do.call(rbind, lapply(res_list, `[[`, "par"))
   b_mat   <- do.call(rbind, lapply(res_list, `[[`, "b"))

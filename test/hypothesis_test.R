@@ -207,7 +207,38 @@ MC_changepoint_test <- function(config) {
     )
   }
 
-  res_list <- mclapply(1:B_mc, one_run, mc.cores = ncore)
+  ### ===== 跨平台并行 =====
+  if (.Platform$OS.type == "windows") {
+
+    cl <- parallel::makeCluster(ncore)
+
+    parallel::clusterEvalQ(cl, {
+      source("E:/BNU/BA4/毕业论文/LTRC-changepoint/data/TimeindepLTRC_gnrt_ChangepointPH.R")
+      source("E:/BNU/BA4/毕业论文/LTRC-changepoint/estimation/estimate.R")
+      source("E:/BNU/BA4/毕业论文/LTRC-changepoint/code/MC.R")
+      source("E:/BNU/BA4/毕业论文/LTRC-changepoint/code/config.R")
+      source("E:/BNU/BA4/毕业论文/LTRC-changepoint/code/save.R")
+      setwd("E:/BNU/BA4/毕业论文/LTRC-changepoint/")
+      source("E:/BNU/BA4/毕业论文/LTRC-changepoint/estimation/plot_baseline.R")
+      source("E:/BNU/BA4/毕业论文/LTRC-changepoint/test/hypothesis_test.R")
+      source("E:/BNU/BA4/毕业论文/LTRC-changepoint/code/config.R")
+    })
+
+    parallel::clusterExport(
+      cl,
+      varlist = c("config"),
+      envir = environment()
+    )
+
+    res_list <- parallel::parLapply(cl, 1:B_mc, one_run)
+
+    parallel::stopCluster(cl)
+
+  } else {
+
+    res_list <- parallel::mclapply(1:B_mc, one_run, mc.cores = ncore)
+
+  }
 
   SUP_obs_vec <- sapply(res_list, `[[`, "SUP")
   pval_vec    <- sapply(res_list, `[[`, "pval")

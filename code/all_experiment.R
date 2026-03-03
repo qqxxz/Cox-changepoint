@@ -1,10 +1,10 @@
-source("/Users/xiaodanqi/Desktop/LTRC-changepoint/data/TimeindepLTRC_gnrt_ChangepointPH.R")
-source("/Users/xiaodanqi/Desktop/LTRC-changepoint/estimation/estimate.R")
-source("/Users/xiaodanqi/Desktop/LTRC-changepoint/code/MC.R")
-source("/Users/xiaodanqi/Desktop/LTRC-changepoint/code/config.R")
-source("/Users/xiaodanqi/Desktop/LTRC-changepoint/code/save.R")
-setwd("/Users/xiaodanqi/Desktop/LTRC-changepoint/")
-source("/Users/xiaodanqi/Desktop/LTRC-changepoint/estimation/plot_baseline.R")
+source("E:/BNU/BA4/毕业论文/LTRC-changepoint/data/TimeindepLTRC_gnrt_ChangepointPH.R")
+source("E:/BNU/BA4/毕业论文/LTRC-changepoint/estimation/estimate.R")
+source("E:/BNU/BA4/毕业论文/LTRC-changepoint/code/MC.R")
+source("E:/BNU/BA4/毕业论文/LTRC-changepoint/code/config.R")
+source("E:/BNU/BA4/毕业论文/LTRC-changepoint/code/save.R")
+setwd("E:/BNU/BA4/毕业论文/LTRC-changepoint")
+source("E:/BNU/BA4/毕业论文/LTRC-changepoint/estimation/plot_baseline.R")
 
 
 # 参数组合
@@ -56,7 +56,7 @@ for(i in 1:nrow(exp_grid)) {
     res        = res,
     config     = SIM_CONFIG,
     true_par   = true_par,
-    out_dir    = "/Users/xiaodanqi/Desktop/LTRC-changepoint/results",
+    out_dir    = "E:/BNU/BA4/毕业论文/LTRC-changepoint/results",
     summary_df = summary_res
   )
 

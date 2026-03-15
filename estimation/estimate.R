@@ -105,7 +105,8 @@ fit_given_eta <- function(data, knots, p, eta) {
     method = "L-BFGS-B",
     lower = c(rep(-5, 2*p), rep(log(1e-2), K)),
     upper = c(rep(5, 2*p), rep(log(10), K)),
-    control = list(maxit = 500, reltol = 1e-8)
+    control = list(maxit = 500, reltol = 1e-8),
+    hessian = TRUE
   )
 
   if (fit$convergence != 0 || !is.finite(fit$value)) {
@@ -248,25 +249,14 @@ select_knots <- function(data, p, quantiles = c(0.2,0.4,0.6,0.8)) {
 }
 
 #####################主函数：拟合分段线性基准风险模型#######################
-fit_piecewise <- function(data_input, p) {
+fit_piecewise <- function(data_input, p, knots) {
 
-  ## 1. 选择最佳分割点
-  knots <- select_knots(data_input, p)
+  ## 1. 确定分割点
   K <- length(knots) - 1
 
   if (K <= 0) {
-    warning("无效的分割点，使用默认分割点")
-    knots <- c(
-      0.9 * min(data_input$Stop, na.rm = TRUE),
-      median(data_input$Stop, na.rm = TRUE),
-      max(data_input$Stop, na.rm = TRUE)
-    )
-    K <- length(knots) - 1
+    stop("Invalid knots")
   }
-
-  best_val <- Inf
-  best_fit <- NULL
-  best_eta <- NA
 
   ## 2. profile likelihood over eta
   prof <- profile_eta(data_input, knots, p)

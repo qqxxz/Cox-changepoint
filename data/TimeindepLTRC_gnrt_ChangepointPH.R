@@ -140,7 +140,7 @@ adjust_censor_rate <- function(target_rate, Data, censor.func){
       actual_rate = mean(Data$Y > (Censor.time + Data$Start), na.rm = TRUE)
       # 检查actual_rate是否有效
       if(is.na(actual_rate) || is.infinite(actual_rate)){
-        return(1e6)  # 返回一个很大的值，表示无效
+        return(1e6)  # 返变点前的回归系数回一个很大的值，表示无效
       }
       
       # 返回差值

@@ -71,8 +71,29 @@ run_simulation <- function(config) {
 
   B <- config$B
 
-  one_rep <- function(b) {
+  #### --------  只生成一次数据用于选择 knots -------- ####
+  set.seed(config$base_seed)
 
+  dat_knots <- TimeindepLTRC_gnrt_ChangepointPH(
+      N = config$n,
+      Distribution = config$Distribution,
+      eta = config$eta,
+      Beta = config$Beta,
+      Gamma = config$Gamma,
+      truncation.percent = config$truncation,
+      censor.percent = config$censor,
+      x1.mean = config$x1.mean,
+      x1.sd   = config$x1.sd,
+      x2.mean = config$x2.mean,
+      x2.sd   = config$x2.sd,
+      adjust.censor = TRUE
+  )$Data
+
+  knots_fixed <- select_knots(dat_knots, config$p)
+
+  cat("Fixed knots:", knots_fixed, "\n")
+
+  one_rep <- function(b) {
     ## ====== 每个 MC replication 独立随机种子 ======
     mc_seed <- config$base_seed +
               config$seed_multiplier * b + 
@@ -97,7 +118,11 @@ run_simulation <- function(config) {
       adjust.censor = TRUE
     )$Data
 
-    fit <- fit_piecewise(dat, p = config$p)
+    fit <- tryCatch(
+      fit_piecewise(dat, p = config$p, knots = knots_fixed),
+      error = function(e) NULL
+    )
+    if (is.null(fit)) return(NULL)
 
     list(
       par = fit$par,
@@ -128,8 +153,23 @@ run_simulation <- function(config) {
 
     })
 
-    parallel::clusterExport(cl, varlist = c("config"), envir = environment())
-
+    parallel::clusterExport(
+      cl,
+      varlist = c(
+        "config",
+        "knots_fixed",
+        "one_rep",
+        "fit_piecewise",
+        "profile_eta",
+        "fit_given_eta",
+        "neg_loglik_profile",
+        "m0",
+        "M0",
+        "compute_ak"
+      ),
+      envir = environment()
+    )
+    
     res_list <- parallel::parLapply(cl, 1:B, one_rep)
 
     parallel::stopCluster(cl)
@@ -150,7 +190,7 @@ run_simulation <- function(config) {
   # 用最后一次的 knots / data 画图即可
   plot_baseline_CHF(
     b_mean  = b_mean,
-    knots   = res_list[[1]]$knots,
+    knots   = knots_fixed,
     data    = res_list[[1]]$data,
     config  = config,
     file = paste0("baseline_CHF_n", config$n,

@@ -70,7 +70,7 @@ summary(cox_fit)
 p <- 2
 
 # 选择最优分割点
-knots <- select_knots(data_input, p)
+knots <- select_knots(data_input, p = 2)
 
 # 拟合模型
 fit_empirical <- fit_piecewise(data_input, p = p, knots = knots)
@@ -78,12 +78,12 @@ fit_empirical <- fit_piecewise(data_input, p = p, knots = knots)
 # p值
 library(MASS)
 hessian <- fit_empirical$optim$hessian
+hessian <- (hessian + t(hessian)) / 2   # 强制对称
 cov_mat <- ginv(hessian)
 se <- sqrt(diag(cov_mat))
 est <- fit_empirical$par[1:length(se)]
 z <- est / se
 p_value <- 2 * pnorm(-abs(z))
-p_value <- ifelse(p_value < 2e-16, "<2e-16", signif(p_value,3))
 
 cat("========== 模型拟合结果 ==========\n")
 cat("eta =", fit_empirical$eta, "\n")
@@ -106,7 +106,7 @@ result_table <- data.frame(
   Estimate = est,
   SE = se,
   Z = z,
-  P_value = pval
+  P_value = p_value
 )
 
 print(result_table)

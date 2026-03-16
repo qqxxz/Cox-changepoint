@@ -11,7 +11,7 @@ source("E:/BNU/BA4/毕业论文/LTRC-changepoint/code/config.R")
 library(openxlsx)
 
 param_grid <- expand.grid(
-  n = c(300, 500),
+  n = c(500),
   truncation = c(0.1, 0.3),
   censor = c(0.2, 0.4)
 )

@@ -45,8 +45,7 @@ M0 <- function(t, b, knots) {
 
 ###################负对数似然函数#######################
 neg_loglik_profile <- function(par, data_input, knots, p, eta) {
-
-  K <- length(knots) - 1  #基准风险被分成的区间数
+  K <- length(knots) - 1  # 基准风险被分成的区间数
 
   beta  <- par[1:p]
   gamma <- par[(p+1):(2*p)]
@@ -54,8 +53,13 @@ neg_loglik_profile <- function(par, data_input, knots, p, eta) {
   b <- exp(theta_b)   # 保证 b_k > 0
 
   X <- as.matrix(data_input[, paste0("X", 1:p)])  # 设计矩阵
+  if (!is.numeric(X)) stop("X 包含非数值数据")
+  if (!is.numeric(beta)) stop("beta 不是数值向量")
   if (p > 1) {
-    Xt <- cbind(data_input[, paste0("X", 2:p)], 1)
+      Xt <- cbind(
+        as.matrix(data_input[, paste0("X", 2:p), drop = FALSE]), # 剔除 X1 的协变量
+        1  # 添加常数项
+  )
   } else {
     Xt <- matrix(1, nrow = nrow(data_input), ncol = 1)
   }
@@ -66,7 +70,7 @@ neg_loglik_profile <- function(par, data_input, knots, p, eta) {
 
   n <- nrow(data_input)
   h <- 1.2 * sd(data_input$X1) * n^(-1/3)
-  ind <- plogis((data_input$X1 - eta) / h) # 平滑eta➡️平滑likelihood
+  ind <- plogis((data_input$X1 - eta) / h) # 平滑 eta
   # ind <- as.numeric(data_input$X1 > eta) # 变点指示变量
 
   psi <- as.vector(X %*% beta + (Xt %*% gamma) * ind) 
@@ -105,7 +109,7 @@ fit_given_eta <- function(data, knots, p, eta) {
     method = "L-BFGS-B",
     lower = c(rep(-5, 2*p), rep(log(1e-2), K)),
     upper = c(rep(5, 2*p), rep(log(10), K)),
-    control = list(maxit = 500, reltol = 1e-8),
+    control = list(maxit = 500, factr = 1e7, pgtol = 1e-8),  # 修改控制参数
     hessian = TRUE
   )
 

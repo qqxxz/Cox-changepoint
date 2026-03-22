@@ -13,7 +13,7 @@ library(openxlsx)
 param_grid <- expand.grid(
   n = c(500),
   truncation = c(0.1, 0.3),
-  censor = c(0.2, 0.4)
+  censor = c(0.4)
 )
 
 all_results <- list()

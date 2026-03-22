@@ -60,17 +60,17 @@ compute_SUP_stat_score <- function(data, fit0, knots, eta_grid, p) {
   beta_hat <- fit0$beta
   b_hat    <- fit0$b
 
-  X  <- as.matrix(data[, paste0("X", 1:p)])
+  X  <- data.matrix(data[, paste0("X", 1:p), drop = FALSE])
   Z  <- data$Stop
   T0 <- data$Start
   delta <- data$Event
-  x1 <- data$X1
+  x1 <- as.numeric(data$X1)
 
   MZ <- M0(Z,  b_hat, knots)
   MT <- M0(T0, b_hat, knots)
 
   Xt <- if (p > 1) {
-    cbind(data[, paste0("X", 2:p)], 1)
+    cbind(data.matrix(data[, paste0("X", 2:p), drop = FALSE]), 1)
   } else {
     matrix(1, nrow = nrow(data), ncol = 1)
   }
@@ -91,8 +91,8 @@ compute_SUP_stat_score <- function(data, fit0, knots, eta_grid, p) {
     Sigma <- matrix(0, ncol(Xt), ncol(Xt))
     idx <- which(Ieta == 1)
     for (i in idx) {
-    xi <- matrix(Xt[i, ], ncol = 1)
-    Sigma <- Sigma + (r[i]^2) * (xi %*% t(xi))
+      xi <- matrix(as.numeric(Xt[i, ]), ncol = 1)
+      Sigma <- Sigma + (r[i]^2) * (xi %*% t(xi))
     }
     Sigma <- Sigma + diag(1e-6, ncol(Sigma))
 

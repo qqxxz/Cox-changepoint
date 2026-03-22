@@ -5,6 +5,7 @@ source("E:/BNU/BA4/毕业论文/LTRC-changepoint/code/config.R")
 source("E:/BNU/BA4/毕业论文/LTRC-changepoint/code/save.R")
 setwd("E:/BNU/BA4/毕业论文/LTRC-changepoint")
 source("E:/BNU/BA4/毕业论文/LTRC-changepoint/estimation/plot_baseline.R")
+source("E:/BNU/BA4/毕业论文/LTRC-changepoint/test/hypothesis_test.R")
 
 
 ## ----------------1. 读取 Stanford Heart Transplant 数据-----------
@@ -145,6 +146,42 @@ write.xlsx(
   rowNames = FALSE
 )
 
+## -------------------4b. 变点存在性检验（两变量：SUP 置换，H0: γ=0）-----------------
+# 与 test/hypothesis_test.R 中 single_cp_test_score 一致；k、B_perm、eta.trim 与 simulation 默认可比
+cp_test_config_2 <- list( # 设置检验参数
+  p = 2L,
+  B_perm = 1000L,
+  k = 5L,
+  eta.trim = 0.01,
+  alpha = 0.05
+)
+set.seed(6)
+cp_test_2 <- single_cp_test_score(data_input, cp_test_config_2) # 进行检验
+cp_pval_2 <- mean(cp_test_2$sup_perm >= cp_test_2$SUP_obs) # 计算p值
+cp_crit_2 <- as.numeric(cp_test_2$crit) # 临界值
+cp_reject_2 <- cp_test_2$SUP_obs > cp_crit_2
+
+cat("\n========== 变点存在性检验（两变量模型，SUP 置换）==========\n")
+cat("H0: 无变点（γ=0）；变点协变量 X1 在置换下可交换\n")
+cat("SUP_obs =", round(cp_test_2$SUP_obs, 6), "\n")
+cat("置换 p 值 Pr(T_perm >= SUP_obs) =", round(cp_pval_2, 6), "\n")
+cat("临界值 alpha=0.05 =", round(cp_crit_2, 6), "\n")
+cat("是否拒绝 H0 (alpha=0.05):", ifelse(cp_reject_2, "是", "否"), "\n")
+
+cp_test_table_2 <- data.frame(
+  Model = "2 covariates (age, transplant)",
+  SUP_obs = cp_test_2$SUP_obs,
+  p_value_perm = cp_pval_2,
+  crit_0.05 = cp_crit_2,
+  reject_H0 = cp_reject_2,
+  B_perm = cp_test_config_2$B_perm,
+  k_grid = cp_test_config_2$k,
+  stringsAsFactors = FALSE
+)
+write.xlsx(
+  cp_test_table_2,
+  file = "E:/BNU/BA4/毕业论文/LTRC-changepoint/real_data/cp_test_table_2para.xlsx"
+)
 ## --------------------5. 将 eta 还原到原始年龄尺度------------------
 age_mean <- mean(dat_raw$age, na.rm = TRUE)
 age_sd   <- sd(dat_raw$age, na.rm = TRUE)
@@ -239,18 +276,58 @@ abline(v = eta_real_age, lty = 2, col = 2)  # 标记最优年龄阈值
 dev.off()
 
 ## -------------------8.绘制基于模型的 Kaplan-Meier 曲线---------------
+library(MASS)
+
 # 还原真实年龄
 data_input$age_centered <- data_input$X1 * age_sd + age_mean
 data_input$age_real <- data_input$age_centered + 48
 
-# 变点模型平均预测生存曲线：共用逻辑（要求 data_input 已含 age_real，与脚本中 age_centered+48 一致）
-model_mean_survival <- function(fit_result, data_input, group_data_list, cols, ylab, main, legend_pos, outfile, width, height, res, cex.legend) {
-  p <- length(fit_result$beta) # 读取模型参数
-  b <- fit_result$b
-  knots <- fit_result$knots
-  beta <- fit_result$beta
-  gamma <- fit_result$gamma
+# 在给定 theta=(beta,gamma,log b) 与固定 eta 下，计算各组平均生存曲线（一列一组）
+.mean_surv_by_groups <- function(theta, eta, knots, tgrid, group_data_list, vars, p) {
+  K <- length(theta) - 2 * p
+  beta <- theta[1:p]
+  gamma <- theta[(p + 1):(2 * p)]
+  theta_b <- theta[(2 * p + 1):(2 * p + K)]
+  b <- exp(theta_b)
+  n_g <- length(group_data_list)
+  S_mat <- matrix(NA_real_, nrow = length(tgrid), ncol = n_g)
+  for (k in seq_len(n_g)) {
+    group_data <- group_data_list[[k]]
+    if (nrow(group_data) == 0L) next
+    X <- as.matrix(group_data[, vars, drop = FALSE])
+    ind <- as.numeric(group_data$X1 > eta)
+    psi <- as.vector(X %*% beta + (X %*% gamma) * ind)
+    psi <- pmin(pmax(psi, -20), 20)
+    S_mat[, k] <- colMeans(sapply(tgrid, function(t) {
+      exp(-M0(t, b, knots) * exp(psi)) # 计算生存函数
+    }))
+  }
+  S_mat
+}
+
+# 变点模型平均预测生存曲线：共用绘图逻辑
+# 置信带：对 optim 中 Hessian 反演得协方差，对 (beta,gamma,log b) 做参数 bootstrap 分位数带；eta 固定为估计值
+model_mean_survival <- function(
+  fit_result,
+  data_input,
+  group_data_list,
+  cols,
+  ylab,
+  main,
+  legend_pos,
+  outfile,
+  width,
+  height,
+  res,
+  cex.legend,
+  ci = TRUE,
+  ci_boot = 400,
+  conf_level = 0.95,
+  ribbon_alpha = 0.22
+) {
+  p <- length(fit_result$beta)
   eta <- fit_result$eta
+  knots <- fit_result$knots
   vars <- paste0("X", seq_len(p))
   if (!"age_real" %in% names(data_input)) {
     stop("data_input 需包含列 age_real（请先按 age_centered、age_real 还原）")
@@ -260,43 +337,91 @@ model_mean_survival <- function(fit_result, data_input, group_data_list, cols, y
   }
   t_min <- min(data_input$Start, na.rm = TRUE)
   t_max <- max(data_input$Stop, na.rm = TRUE)
-  tgrid <- seq(t_min, t_max, length.out = 400) # 构造时间网格
+  tgrid <- seq(t_min, t_max, length.out = 400) # 构造时间轴
   n_g <- length(group_data_list)
-  S_mat <- matrix(NA_real_, nrow = length(tgrid), ncol = n_g)
-  for (k in seq_len(n_g)) { # 按组计算生存函数
-    group_data <- group_data_list[[k]]
-    if (nrow(group_data) == 0L) next
-    X <- as.matrix(group_data[, vars, drop = FALSE])
-    ind <- as.numeric(group_data$X1 > eta)
-    psi <- as.vector(X %*% beta + (X %*% gamma) * ind)
-    psi <- pmin(pmax(psi, -20), 20)
-    S_mat[, k] <- colMeans(sapply(tgrid, function(t) {
-      exp(-M0(t, b, knots) * exp(psi))
-    }))
+  par_hat <- fit_result$optim$par
+  S_mat <- .mean_surv_by_groups(par_hat, eta, knots, tgrid, group_data_list, vars, p) # 计算生存函数
+  lo <- hi <- NULL
+  if (isTRUE(ci) && !is.null(fit_result$optim$hessian)) {
+    H <- fit_result$optim$hessian
+    if (nrow(H) == length(par_hat) && ncol(H) == length(par_hat)) {
+      H <- (H + t(H)) / 2
+      cov_mat <- tryCatch(
+        ginv(H), # hessian矩阵的逆为协方差矩阵
+        error = function(e) NULL
+      )
+      if (!is.null(cov_mat)) {
+        draws <- tryCatch(
+          mvrnorm(ci_boot, par_hat, cov_mat), # 正态分布中采样，进行参数bootstrap
+          error = function(e) NULL
+        )
+        if (!is.null(draws)) {
+          qlo <- (1 - conf_level) / 2
+          qhi <- 1 - qlo
+          lo <- matrix(NA_real_, nrow = length(tgrid), ncol = n_g)
+          hi <- matrix(NA_real_, nrow = length(tgrid), ncol = n_g)
+          S_arr <- array(NA_real_, dim = c(length(tgrid), n_g, ci_boot))
+          for (bb in seq_len(ci_boot)) { # 每组参数计算生存曲线
+            S_arr[, , bb] <- .mean_surv_by_groups(
+              draws[bb, ], eta, knots, tgrid, group_data_list, vars, p
+            )
+          }
+          for (k in seq_len(n_g)) { # 对每个时间点t求上下界
+            lo[, k] <- apply(S_arr[, k, ], 1, quantile, probs = qlo, na.rm = TRUE)
+            hi[, k] <- apply(S_arr[, k, ], 1, quantile, probs = qhi, na.rm = TRUE)
+          }
+          lo <- pmax(pmin(lo, 1), 0)
+          hi <- pmax(pmin(hi, 1), 0)
+        }
+      }
+    }
   }
   ok <- !apply(S_mat, 2, function(x) all(is.na(x)))
   if (!is.null(outfile)) {
     png(outfile, width = width, height = height, res = res)
     on.exit(dev.off(), add = TRUE)
   }
-  matplot(
-    tgrid, S_mat[, ok, drop = FALSE],
-    type = "l", lty = 1, col = cols[ok],
+  plot(
+    NA, NA,
+    xlim = c(t_min, t_max), ylim = c(0, 1),
     xlab = "Follow-up time", ylab = ylab, main = main
   )
-  legend(
-    legend_pos, legend = names(group_data_list)[ok], col = cols[ok], lty = 1,
+  if (isTRUE(ci) && !is.null(lo) && !is.null(hi)) {
+    for (k in seq_len(n_g)) {
+      if (!ok[k]) next
+      polygon( # 画置信区间阴影
+        c(tgrid, rev(tgrid)),
+        c(lo[, k], rev(hi[, k])),
+        col = adjustcolor(cols[k], alpha.f = ribbon_alpha),
+        border = NA
+      )
+    }
+  }
+  matlines( # 画曲线
+    tgrid, S_mat[, ok, drop = FALSE],
+    lty = 1, col = cols[ok], lwd = 2
+  )
+  legend( # 图例
+    legend_pos, legend = names(group_data_list)[ok], col = cols[ok], lty = 1, lwd = 2,
     bty = "n", cex = cex.legend
   )
-  invisible(list(tgrid = tgrid, S = S_mat))
+  invisible(list(tgrid = tgrid, S = S_mat, lower = lo, upper = hi))
 }
-
-plot_group_km <- function(fit_result, data_input, eta_real_age,
-                           main = "Model-based survival by age threshold",
-                           outfile = NULL,
-                           width = 2000,
-                           height = 1600,
-                           res = 300) {
+# 按年龄分组
+plot_group_km <- function( 
+  fit_result,
+  data_input,
+  eta_real_age,
+  main = "Model-based survival by age threshold",
+  outfile = NULL,
+  width = 2000,
+  height = 1600,
+  res = 300,
+  ci = TRUE,
+  ci_boot = 400,
+  conf_level = 0.95,
+  ribbon_alpha = 0.22
+) {
   d <- data_input
   d$group <- ifelse(d$age_real > eta_real_age, "Age > threshold", "Age ≤ threshold")
   d$group <- factor(d$group, levels = c("Age ≤ threshold", "Age > threshold"))
@@ -308,10 +433,11 @@ plot_group_km <- function(fit_result, data_input, eta_real_age,
   model_mean_survival(
     fit_result, data_input, group_data_list, cols,
     ylab = "Survival probability", main = main, legend_pos = "topright",
-    outfile = outfile, width = width, height = height, res = res, cex.legend = 1
+    outfile = outfile, width = width, height = height, res = res, cex.legend = 1,
+    ci = ci, ci_boot = ci_boot, conf_level = conf_level, ribbon_alpha = ribbon_alpha
   )
 }
-
+# 分年龄+是否移植分组
 plot_km_age_transplant <- function(
   fit_result,
   data_input,
@@ -320,7 +446,11 @@ plot_km_age_transplant <- function(
   outfile = NULL,
   width = 2000,
   height = 1600,
-  res = 300
+  res = 300,
+  ci = TRUE,
+  ci_boot = 400,
+  conf_level = 0.95,
+  ribbon_alpha = 0.22
 ) {
   d <- data_input
   age_hi <- d$age_real > eta_real_age
@@ -335,8 +465,59 @@ plot_km_age_transplant <- function(
   model_mean_survival(
     fit_result, data_input, group_data_list, cols,
     ylab = "Survival probability", main = main, legend_pos = "topright",
-    outfile = outfile, width = width, height = height, res = res, cex.legend = 0.85
+    outfile = outfile, width = width, height = height, res = res, cex.legend = 0.85,
+    ci = ci, ci_boot = ci_boot, conf_level = conf_level, ribbon_alpha = ribbon_alpha
   )
+}
+
+# 与 KM 图分层一致的非参数 log-rank 检验（LTRC：Surv(Start, Stop, Event)；rho=0 为标准 log-rank）
+run_logrank_km <- function(data_input, eta_real_age, strat_type = c("age", "age_tx", "age_surgery")) {
+  strat_type <- match.arg(strat_type)
+  if (!"age_real" %in% names(data_input)) {
+    stop("run_logrank_km: data_input 需含 age_real")
+  }
+  d <- data_input
+  if (strat_type == "age") {
+    d$strat <- ifelse(d$age_real > eta_real_age, "Age > threshold", "Age ≤ threshold")
+    d$strat <- factor(d$strat, levels = c("Age ≤ threshold", "Age > threshold"))
+  } else if (strat_type == "age_tx") {
+    age_hi <- d$age_real > eta_real_age
+    tx <- d$X2 == 1L
+    d$strat <- interaction(
+      ifelse(age_hi, "Age > threshold", "Age ≤ threshold"),
+      ifelse(tx, "Transplant", "No transplant"),
+      sep = ", "
+    )
+    d$strat <- factor(d$strat, levels = c(
+      "Age ≤ threshold, No transplant",
+      "Age ≤ threshold, Transplant",
+      "Age > threshold, No transplant",
+      "Age > threshold, Transplant"
+    ))
+  } else {
+    if (!"X3" %in% names(d)) {
+      stop("run_logrank_km: strat_type=age_surgery 需要列 X3")
+    }
+    age_hi <- d$age_real > eta_real_age
+    sg <- d$X3 == 1L
+    d$strat <- interaction(
+      ifelse(age_hi, "Age > threshold", "Age ≤ threshold"),
+      ifelse(sg, "Surgery", "No surgery"),
+      sep = ", "
+    )
+    d$strat <- factor(d$strat, levels = c(
+      "Age ≤ threshold, No surgery",
+      "Age ≤ threshold, Surgery",
+      "Age > threshold, No surgery",
+      "Age > threshold, Surgery"
+    ))
+  }
+  d$strat <- droplevels(d$strat) #去除空的分组
+  if (nlevels(d$strat) < 2L) {
+    warning("run_logrank_km: 有效分层少于 2 组，跳过")
+    return(invisible(NULL))
+  }
+  survdiff(Surv(Start, Stop, Event) ~ strat, data = d, rho = 0) # 执行log-rank检验
 }
 
 
@@ -346,7 +527,7 @@ plot_group_km(
   data_input,
   eta_real_age,
   main = "",
-  outfile = "E:/BNU/BA4/毕业论文/LTRC-changepoint/real_data/km_age_2para.png"
+  outfile = "E:/BNU/BA4/毕业论文/LTRC-changepoint/real_data/km_age_2para_confi.png"
 )
 
 plot_km_age_transplant(
@@ -354,8 +535,13 @@ plot_km_age_transplant(
   data_input,
   eta_real_age,
   main = "",
-  outfile = "E:/BNU/BA4/毕业论文/LTRC-changepoint/real_data/km_age_transplant_2para.png"
+  outfile = "E:/BNU/BA4/毕业论文/LTRC-changepoint/real_data/km_age_transplant_2para_confi.png"
 )
+
+cat("\n========== Log-rank（两变量数据，分层与 KM 图一致）==========\n")
+print(run_logrank_km(data_input, eta_real_age, "age"))
+cat("\n")
+print(run_logrank_km(data_input, eta_real_age, "age_tx"))
 
 
 ## ---------------2. 数据整理--------------
@@ -462,6 +648,44 @@ write.xlsx(
   file = "E:/BNU/BA4/毕业论文/LTRC-changepoint/real_data/result_table_3para.xlsx",
   rowNames = FALSE
 )
+
+## -------------------4b. 变点存在性检验（三变量：SUP 置换，H0: γ=0）-----------------
+cp_test_config_3 <- list(
+  p = 3L,
+  B_perm = 1000L,
+  k = 20L,
+  eta.trim = 0.01,
+  alpha = 0.05
+)
+set.seed(20250323)
+cp_test_3 <- single_cp_test_score(data_input, cp_test_config_3)
+cp_pval_3 <- mean(cp_test_3$sup_perm >= cp_test_3$SUP_obs)
+cp_crit_3 <- as.numeric(cp_test_3$crit)
+cp_reject_3 <- cp_test_3$SUP_obs > cp_crit_3
+
+cat("\n========== 变点存在性检验（三变量模型，SUP 置换）==========\n")
+cat("H0: 无变点（γ=0）；变点协变量 X1 在置换下可交换\n")
+cat("SUP_obs =", round(cp_test_3$SUP_obs, 6), "\n")
+cat("置换 p 值 Pr(T_perm >= SUP_obs) =", round(cp_pval_3, 6), "\n")
+cat("临界值 alpha=0.05 =", round(cp_crit_3, 6), "\n")
+cat("是否拒绝 H0 (alpha=0.05):", ifelse(cp_reject_3, "是", "否"), "\n")
+
+cp_test_table_3 <- data.frame(
+  Model = "3 covariates (age, transplant, surgery)",
+  SUP_obs = cp_test_3$SUP_obs,
+  p_value_perm = cp_pval_3,
+  crit_0.05 = cp_crit_3,
+  reject_H0 = cp_reject_3,
+  B_perm = cp_test_config_3$B_perm,
+  k_grid = cp_test_config_3$k,
+  stringsAsFactors = FALSE
+)
+
+write.xlsx(
+  cp_test_table_3,
+  file = "E:/BNU/BA4/毕业论文/LTRC-changepoint/real_data/cp_test_table_3para.xlsx"
+)
+
 ## -------------5. 将 eta 还原到原始年龄尺度-----------
 age_mean <- mean(dat_raw$age, na.rm = TRUE)
 age_sd   <- sd(dat_raw$age, na.rm = TRUE)
@@ -479,7 +703,7 @@ cat("变点（真实年龄）eta_real_age =", round(eta_real_age, 4), "\n")
 data_input$age_centered <- data_input$X1 * age_sd + age_mean
 data_input$age_real <- data_input$age_centered + 48
 
-## 6. 作图：估计的基准累积风险函数与基准生存函数
+## ---------------6. 作图：估计的基准累积风险函数与基准生存函数-------------
 plot_empirical_baseline <- function(fit_result, data_input) {
   b <- fit_result$b
   knots <- fit_result$knots
@@ -513,7 +737,7 @@ plot_empirical_baseline <- function(fit_result, data_input) {
 
 plot_empirical_baseline(fit_empirical, data_input)
 
-## 7. profile likelihood for eta
+## ----------------7. profile likelihood for eta---------------
 # 绘制 eta 和 negloglik 的关系图，显示 profile likelihood 曲线
 profile_eta_curve <- function(data, knots, p) {
   eta_grid <- get_eta_grid(data)  # 获取候选的 eta 网格
@@ -559,3 +783,72 @@ abline(v = eta_real_age, lty = 2, col = 2)  # 标记最优年龄阈值
 
 dev.off()
 
+## -------------------8.绘制基于模型的 Kaplan-Meier 曲线---------------
+
+# 分年龄+是否手术分组（需 data_input 含 X3，与三变量模型一致）
+plot_km_age_surgery <- function(
+    fit_result,
+    data_input,
+    eta_real_age,
+    main = "Model-based survival by age threshold and surgery",
+    outfile = NULL,
+    width = 2000,
+    height = 1600,
+    res = 300,
+    ci = TRUE,
+    ci_boot = 400,
+    conf_level = 0.95,
+    ribbon_alpha = 0.22
+) {
+  d <- data_input
+  if (!"X3" %in% names(d)) {
+    stop("plot_km_age_surgery: data_input 需包含列 X3")
+  }
+  age_hi <- d$age_real > eta_real_age
+  sg <- d$X3 == 1L
+  group_data_list <- list(
+    "Age ≤ threshold, No surgery" = d[!age_hi & !sg, , drop = FALSE],
+    "Age ≤ threshold, Surgery" = d[!age_hi & sg, , drop = FALSE],
+    "Age > threshold, No surgery" = d[age_hi & !sg, , drop = FALSE],
+    "Age > threshold, Surgery" = d[age_hi & sg, , drop = FALSE]
+  )
+  cols <- c("#2E86C1", "#E74C3C", "#27AE60", "#8E44AD")
+  model_mean_survival(
+    fit_result, data_input, group_data_list, cols,
+    ylab = "Survival probability", main = main, legend_pos = "topright",
+    outfile = outfile, width = width, height = height, res = res, cex.legend = 0.85,
+    ci = ci, ci_boot = ci_boot, conf_level = conf_level, ribbon_alpha = ribbon_alpha
+  )
+}
+
+# 三变量模型：变点模型平均预测生存曲线 + 参数 bootstrap 置信带（与两变量脚本中用法一致）
+plot_group_km(
+  fit_empirical,
+  data_input,
+  eta_real_age,
+  main = "",
+  outfile = "E:/BNU/BA4/毕业论文/LTRC-changepoint/real_data/km_age_3para_confi.png"
+)
+
+plot_km_age_transplant(
+  fit_empirical,
+  data_input,
+  eta_real_age,
+  main = "",
+  outfile = "E:/BNU/BA4/毕业论文/LTRC-changepoint/real_data/km_age_transplant_3para_confi.png"
+)
+
+plot_km_age_surgery(
+  fit_empirical,
+  data_input,
+  eta_real_age,
+  main = "",
+  outfile = "E:/BNU/BA4/毕业论文/LTRC-changepoint/real_data/km_age_surgery_3para_confi.png"
+)
+
+cat("\n========== Log-rank（三变量数据，分层与 KM 图一致）==========\n")
+print(run_logrank_km(data_input, eta_real_age, "age"))
+cat("\n")
+print(run_logrank_km(data_input, eta_real_age, "age_tx"))
+cat("\n")
+print(run_logrank_km(data_input, eta_real_age, "age_surgery"))

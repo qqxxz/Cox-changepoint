@@ -7,7 +7,6 @@ setwd("E:/BNU/BA4/毕业论文/LTRC-changepoint")
 source("E:/BNU/BA4/毕业论文/LTRC-changepoint/estimation/plot_baseline.R")
 source("E:/BNU/BA4/毕业论文/LTRC-changepoint/test/hypothesis_test.R")
 
-
 ## ----------------1. 读取 Stanford Heart Transplant 数据-----------
 library(survival)
 
@@ -151,7 +150,7 @@ write.xlsx(
 cp_test_config_2 <- list( # 设置检验参数
   p = 2L,
   B_perm = 1000L,
-  k = 5L,
+  k = 10L,
   eta.trim = 0.01,
   alpha = 0.05
 )
@@ -182,6 +181,19 @@ write.xlsx(
   cp_test_table_2,
   file = "E:/BNU/BA4/毕业论文/LTRC-changepoint/real_data/cp_test_table_2para.xlsx"
 )
+
+# 随机种子多次置换检验：每轮随机整数作 set.seed 再算 p 值；0 表示不跑（耗时 ≈ 次数 × B_perm）
+N_CP_REP_RANDOM_2 <- 1000L
+if (N_CP_REP_RANDOM_2 > 0L) {
+  replicate_cp_test_random_seeds(
+    data_input,
+    cp_test_config_2,
+    n_rep = N_CP_REP_RANDOM_2,
+    outfile = "E:/BNU/BA4/毕业论文/LTRC-changepoint/real_data/cp_test_random_seeds_2para_10k_1000.xlsx",
+    generator_seed = 6L
+  )
+}
+
 ## --------------------5. 将 eta 还原到原始年龄尺度------------------
 age_mean <- mean(dat_raw$age, na.rm = TRUE)
 age_sd   <- sd(dat_raw$age, na.rm = TRUE)
@@ -653,7 +665,7 @@ write.xlsx(
 cp_test_config_3 <- list(
   p = 3L,
   B_perm = 1000L,
-  k = 20L,
+  k = 10L,
   eta.trim = 0.01,
   alpha = 0.05
 )
@@ -685,6 +697,17 @@ write.xlsx(
   cp_test_table_3,
   file = "E:/BNU/BA4/毕业论文/LTRC-changepoint/real_data/cp_test_table_3para.xlsx"
 )
+# 随机种子多次置换检验：每轮随机整数作 set.seed 再算 p 值；0 表示不跑（耗时 ≈ 次数 × B_perm）
+N_CP_REP_RANDOM_3 <- 260L
+if (N_CP_REP_RANDOM_3 > 0L) {
+  replicate_cp_test_random_seeds(
+    data_input,
+    cp_test_config_3,
+    n_rep = N_CP_REP_RANDOM_3,
+    outfile = "E:/BNU/BA4/毕业论文/LTRC-changepoint/real_data/cp_test_random_seeds_3para_10k.xlsx",
+    generator_seed = 6L
+  )
+}
 
 ## -------------5. 将 eta 还原到原始年龄尺度-----------
 age_mean <- mean(dat_raw$age, na.rm = TRUE)

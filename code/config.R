@@ -34,6 +34,6 @@ SIM_CONFIG <- list(
 
   ## ========= RNG 控制 =========
   base_seed = 123,
-  seed_multiplier = 4567
+  seed_multiplier = 45679
 )
 

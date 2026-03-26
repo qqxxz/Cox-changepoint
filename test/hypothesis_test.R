@@ -158,6 +158,55 @@ single_cp_test_score <- function(data, config) {
 }
 
 
+# 多次循环：每轮随机抽取整数作 set.seed，再对同一数据做 SUP 置换检验；保存 seed 与 p 值，可选写 Excel。
+# generator_seed 为整数时先 set.seed(generator_seed)，再 sample 各轮检验用种子（整表可复现）；为 NA 时不固定。
+replicate_cp_test_random_seeds <- function(
+    data,
+    config,
+    n_rep = 100L,
+    outfile = NULL,
+    generator_seed = NA,
+    max_seed = 2147483647L
+) {
+  n_rep <- as.integer(n_rep)
+  if (n_rep < 1L) {
+    stop("n_rep 须为正整数")
+  }
+  max_seed <- as.integer(max_seed)
+  if (!is.na(generator_seed)) {
+    set.seed(as.integer(generator_seed))
+  }
+  seeds <- sample.int(max_seed, size = n_rep, replace = FALSE)
+
+  df <- data.frame(
+    replication = seq_len(n_rep),
+    seed = NA_integer_,
+    p_value = NA_real_,
+    SUP_obs = NA_real_,
+    stringsAsFactors = FALSE
+  )
+
+  for (i in seq_len(n_rep)) {
+    s <- seeds[i]
+    set.seed(s)
+    res <- single_cp_test_score(data, config)
+    df$seed[i] <- s
+    df$p_value[i] <- mean(res$sup_perm >= res$SUP_obs)
+    df$SUP_obs[i] <- res$SUP_obs
+  }
+
+  if (!is.null(outfile)) {
+    if (!requireNamespace("openxlsx", quietly = TRUE)) {
+      stop("写入 Excel 需要安装 openxlsx 包")
+    }
+    openxlsx::write.xlsx(df, outfile, rowNames = FALSE)
+    cat("replicate_cp_test_random_seeds: 已保存 ", outfile, "\n", sep = "")
+  }
+
+  invisible(list(df = df, outfile = outfile))
+}
+
+
 #################  MC 主函数#####################
 MC_changepoint_test <- function(config) {
 

@@ -61,7 +61,7 @@ dat_raw$Start <- dat_raw$start
 dat_raw$Stop  <- dat_raw$stop
 
 # 变点变量 X1 = 年龄（标准化）
-dat_raw$X1 <- as.numeric(scale(dat_raw$age))
+dat_raw$X1 <- as.numeric(dat_raw$age)
 
 # 协变量 X2 = 是否移植
 dat_raw$X2 <- as.numeric(as.character(dat_raw$transplant))
@@ -151,7 +151,7 @@ cp_test_config_2 <- list( # 设置检验参数
   p = 2L,
   B_perm = 1000L,
   k = 10L,
-  eta.trim = 0.01,
+  eta.trim = 0.1,
   alpha = 0.05
 )
 set.seed(6)
@@ -183,13 +183,13 @@ write.xlsx(
 )
 
 # 随机种子多次置换检验：每轮随机整数作 set.seed 再算 p 值；0 表示不跑（耗时 ≈ 次数 × B_perm）
-N_CP_REP_RANDOM_2 <- 1000L
+N_CP_REP_RANDOM_2 <- 500L
 if (N_CP_REP_RANDOM_2 > 0L) {
   replicate_cp_test_random_seeds(
     data_input,
     cp_test_config_2,
     n_rep = N_CP_REP_RANDOM_2,
-    outfile = "E:/BNU/BA4/毕业论文/LTRC-changepoint/real_data/cp_test_random_seeds_2para_10k_1000.xlsx",
+    outfile = "E:/BNU/BA4/毕业论文/LTRC-changepoint/real_data/cp_test_random_seeds_2para_10k_0.1.xlsx",
     generator_seed = 6L
   )
 }

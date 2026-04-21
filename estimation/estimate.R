@@ -69,7 +69,7 @@ neg_loglik_profile <- function(par, data_input, knots, p, eta) {
   delta <- data_input$Event # 事件指示变量
 
   n <- nrow(data_input)
-  h <- 1.2 * sd(data_input$X1) * n^(-1/3)
+  h <- 1.5 * sd(data_input$X1) * n^(-1/4)
   ind <- plogis((data_input$X1 - eta) / h) # 平滑 eta
   # ind <- as.numeric(data_input$X1 > eta) # 变点指示变量
 
@@ -96,7 +96,7 @@ fit_given_eta <- function(data, knots, p, eta) {
 
   init <- c(
     rep(1, 2*p),        # beta, gamma 0 0.8➡️1
-    rep(0.1 * runif(1,0.5,1.5), K)    # log(b) 0.1
+    rep(log(mean(data$Event) / mean(data$Stop)), K)    # log(b) 0.1
   )
 
   fit <- optim(
@@ -109,7 +109,7 @@ fit_given_eta <- function(data, knots, p, eta) {
     method = "L-BFGS-B",
     lower = c(rep(-5, 2*p), rep(log(1e-2), K)),
     upper = c(rep(5, 2*p), rep(log(10), K)),
-    control = list(maxit = 500, factr = 1e7, pgtol = 1e-8),  # 修改控制参数
+    control = list(maxit = 1000, factr = 1e4, pgtol = 1e-10),  # 修改控制参数
     hessian = TRUE
   )
 
@@ -125,7 +125,7 @@ fit_given_eta <- function(data, knots, p, eta) {
 }
 
 ######################网格搜索#####################
-get_eta_grid <- function(data, probs = seq(0.15, 0.85, by = 0.05)) {
+get_eta_grid <- function(data, probs = seq(0.1, 0.9, by = 0.02)) {
   unique(quantile(data$X1, probs = probs, na.rm = TRUE))
 } # 构造搜索范围，在 X1 的 15%～85% 分位数之间，每 5% 取一个候选 η
 
@@ -163,7 +163,7 @@ profile_eta <- function(data, knots, p) {
 }
 
 #####################计算 AIC 并选择最佳分割点#######################
-select_knots <- function(data, p, quantiles = c(0.2,0.4,0.6,0.8)) {
+select_knots <- function(data, p, quantiles = c(0.05,0.1,0.2,0.3,0.5,0.7,0.9)) {
     Z <- data$Stop[!is.na(data$Stop)]
     if (length(Z) == 0) {
         stop("没有有效的生存时间数据")
@@ -193,7 +193,7 @@ select_knots <- function(data, p, quantiles = c(0.2,0.4,0.6,0.8)) {
         for (k in 1:(length(knots)-1)) {
           if (sum(data$Event == 1 &
                   data$Stop >= knots[k] &
-                  data$Stop < knots[k+1]) < 3) {
+                  data$Stop < knots[k+1]) < 2) {
             valid <- FALSE
             break
           }
@@ -205,7 +205,7 @@ select_knots <- function(data, p, quantiles = c(0.2,0.4,0.6,0.8)) {
 
         init <- c(
             rep(1, 2*p),  # 0.8➡️1
-            rep(0.1 * runif(1,0.5,1.5), K)
+            rep(log(mean(data$Event) / mean(data$Stop)), K)
         ) # 初值
 
         eta_tmp <- median(data$X1, na.rm = TRUE) # 固定 eta
@@ -337,7 +337,7 @@ compute_AIE_SF <- function(fit_result, data, config) {
     # 数值积分计算绝对误差
     dt <- diff(tgrid)[1]
     eps <- 1e-6
-    integral <- sum(abs(S_hat - S_true) / pmax(S_true, eps)) * dt
+    integral <- sum(abs(S_hat - S_true) ) * dt
 
     # 除以观测范围长度
     range_len <- Z_max - Z_min

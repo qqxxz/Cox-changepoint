@@ -3,7 +3,7 @@ SIM_CONFIG <- list(
   ## ========= Monte Carlo =========
   B = 1000,
   n = 300,
-  Distribution = "Exp",
+  Distribution = "QuadraticLinear",
   truncation = 0.1, # 10%, 30%
   censor = 0.2,  # 20%, 40%
 
@@ -26,7 +26,7 @@ SIM_CONFIG <- list(
 
   ## ========= SUP 检验参数 =========
   k = 20,                  # 变点候选网格数 |H|
-  eta.trim = 0.01,        # 去除两端极端点比例
+  eta.trim = 0.1,        # 去除两端极端点比例
   B_perm = 1000,           # 每次检验的置换次数
 
   ## ========= 显著性水平 =========
@@ -34,6 +34,6 @@ SIM_CONFIG <- list(
 
   ## ========= RNG 控制 =========
   base_seed = 123,
-  seed_multiplier = 45679
+  seed_multiplier = 6699
 )
 

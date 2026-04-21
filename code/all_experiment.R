@@ -18,7 +18,7 @@ exp_grid <- expand.grid(
   censor = censor_list
 )
 
-results_all <- list()  # 保存每次实验结果
+results_all <- list()  # 保存每次实验结果 
 
 for(i in 1:nrow(exp_grid)) {
 

@@ -2,78 +2,58 @@ library(parallel)
 ncore <- detectCores() - 1  # 留一个核给系统
 
 ################################无变点模型（γ=0）的拟合######################
-fit_null_model <- function(data, knots, p) {
+fit_null_model <- function(data, sp, p) {
+  sp <- spline_setup(data$Stop, sp$k, sp$od, knotc = sp$knotc,
+                     times_T0 = data$Start)
 
-  K <- length(knots) - 1
-
-  neg_loglik_null <- function(par, data_input, knots, p) {
-
-    beta  <- par[1:p]
-    theta_b <- par[(p+1):(p+K)]
-    b <- exp(theta_b)
+  neg_loglik_null <- function(par, data_input, sp, p) {
+    beta     <- par[1:p]
+    theta_xi <- par[(p + 1):(p + sp$p)]
+    xi       <- theta_xi^2
 
     X <- as.matrix(data_input[, paste0("X", 1:p)])
-    Z  <- data_input$Stop
-    T0 <- data_input$Start
+    psi <- pmin(pmax(as.vector(X %*% beta), -20), 20)
+
+    mZ <- pmax(as.vector(xi %*% sp$Msp), 1e-10)
+    MZ <- as.vector(xi %*% sp$Isp)
+    MT <- as.vector(xi %*% sp$Isp_T0)
+
     delta <- data_input$Event
-
-    psi <- as.vector(X %*% beta)
-    psi <- pmin(pmax(psi, -20), 20)
-
-    mZ <- m0(Z, b, knots)
-    MZ <- M0(Z, b, knots)
-    MT <- M0(T0, b, knots)
-
-    ll <- sum(delta * (log(mZ) + psi)) -
-          sum((MZ - MT) * exp(psi))
-
-    return(-ll)
+    event_ll <- sum(ifelse(delta > 0, log(mZ) + psi, 0))
+    risk_ll  <- sum((MZ - MT) * exp(psi))
+    nll <- -(event_ll - risk_ll)
+    if (!is.finite(nll)) return(1e10)
+    nll
   }
 
-  init <- c(rep(1, p), rep(0.1, K))
-
+  init <- c(rep(1, p), rep(0.3, sp$p))
   fit <- optim(
-    par = init,
-    fn  = neg_loglik_null,
-    data_input = data,
-    knots = knots,
-    p = p,
+    par = init, fn = neg_loglik_null,
+    data_input = data, sp = sp, p = p,
     method = "L-BFGS-B",
-    lower = c(rep(-5, p), rep(log(1e-2), K)),
-    upper = c(rep(5, p), rep(log(10), K))
+    lower = c(rep(-5, p), rep(0, sp$p)),
+    upper = c(rep(5, p), rep(5, sp$p))
   )
 
-  beta_hat <- fit$par[1:p]
-  b_hat    <- exp(fit$par[(p+1):(p+K)])
-
-  list(
-    beta = beta_hat,
-    b    = b_hat,
-    logLik = -fit$value
-  )
+  xi_hat <- fit$par[(p + 1):(p + sp$p)]^2
+  list(beta = fit$par[1:p], xi = xi_hat, b = xi_hat, logLik = -fit$value)
 }
 
 
 ##########################SUP 统计量######################
-compute_SUP_stat_score <- function(data, fit0, knots, eta_grid, p) {
+compute_SUP_stat_score <- function(data, fit0, sp, eta_grid, p) {
 
   beta_hat <- fit0$beta
-  b_hat    <- fit0$b
+  xi_hat   <- fit0$xi
 
   X  <- data.matrix(data[, paste0("X", 1:p), drop = FALSE])
-  Z  <- data$Stop
-  T0 <- data$Start
   delta <- data$Event
-  x1 <- as.numeric(data$X1)
+  u_cp <- as.numeric(data$U)
 
-  MZ <- M0(Z,  b_hat, knots)
-  MT <- M0(T0, b_hat, knots)
+  MZ <- as.vector(xi_hat %*% sp$Isp)
+  MT <- as.vector(xi_hat %*% sp$Isp_T0)
 
-  Xt <- if (p > 1) {
-    cbind(data.matrix(data[, paste0("X", 2:p), drop = FALSE]), 1)
-  } else {
-    matrix(1, nrow = nrow(data), ncol = 1)
-  }
+  Xt <- cbind(1, X)  # X̃ = (1, X1,...,Xp)
 
   psi <- as.vector(X %*% beta_hat)
   mu  <- as.numeric((MZ - MT) * exp(psi))
@@ -84,9 +64,9 @@ compute_SUP_stat_score <- function(data, fit0, knots, eta_grid, p) {
   for (k in seq_along(eta_grid)) {
 
     eta <- eta_grid[k]
-    Ieta <- as.numeric(x1 > eta)
+    Ieta <- as.numeric(u_cp > eta)
 
-    U <- colSums(sweep(Xt, 1, r * Ieta, "*"))
+    U_score <- colSums(sweep(Xt, 1, r * Ieta, "*"))
 
     Sigma <- matrix(0, ncol(Xt), ncol(Xt))
     idx <- which(Ieta == 1)
@@ -96,7 +76,7 @@ compute_SUP_stat_score <- function(data, fit0, knots, eta_grid, p) {
     }
     Sigma <- Sigma + diag(1e-6, ncol(Sigma))
 
-    SUP_vals[k] <- as.numeric(t(U) %*% solve(Sigma, U))
+    SUP_vals[k] <- as.numeric(t(U_score) %*% solve(Sigma, U_score))
   }
 
   list(
@@ -115,22 +95,22 @@ single_cp_test_score <- function(data, config) {
   trim   <- config$eta.trim
 
   # 对一份样本数据做一次变点存在性检验
-  knots <- select_knots(data, p)
+  sp <- select_knots(data, p)$sp
 
-  x1 <- data$X1
-  x1_min <- min(x1, na.rm = TRUE)
-  x1_max <- max(x1, na.rm = TRUE)
+  U <- data$U
+  u_min <- min(U, na.rm = TRUE)
+  u_max <- max(U, na.rm = TRUE)
 
   # 为避免极端点数值不稳定，可在两端稍作截断
-  lower <- x1_min + trim * (x1_max - x1_min)
-  upper <- x1_max - trim * (x1_max - x1_min)
+  lower <- u_min + trim * (u_max - u_min)
+  upper <- u_max - trim * (u_max - u_min)
 
   eta_grid <- seq(lower, upper, length.out = k)
 
-  fit0 <- fit_null_model(data, knots, p)
+  fit0 <- fit_null_model(data, sp, p)
 
   sup_obs <- compute_SUP_stat_score(
-    data, fit0, knots, eta_grid, p
+    data, fit0, sp, eta_grid, p
   )$SUP
 
   sup_perm <- numeric(B_perm)
@@ -138,13 +118,13 @@ single_cp_test_score <- function(data, config) {
   # 构造置换分布
   for (b in 1:B_perm) {
     data_perm <- data
-    data_perm$X1 <- sample(data$X1) # 打乱变点协变量
+    data_perm$U <- sample(data$U) # 打乱变点协变量 U
 
     # 重新拟合零假设模型
-    fit0_perm <- fit_null_model(data_perm, knots, p)
+    fit0_perm <- fit_null_model(data_perm, sp, p)
 
     sup_perm[b] <- compute_SUP_stat_score(
-      data_perm, fit0_perm, knots, eta_grid, p
+      data_perm, fit0_perm, sp, eta_grid, p
     )$SUP
   }
 
@@ -236,10 +216,10 @@ MC_changepoint_test <- function(config) {
       Gamma = config$Gamma,
       truncation.percent = config$truncation,
       censor.percent = config$censor,
+      u.mean = config$u.mean,
+      u.sd   = config$u.sd,
       x1.mean = config$x1.mean,
       x1.sd   = config$x1.sd,
-      x2.mean = config$x2.mean,
-      x2.sd   = config$x2.sd,
       adjust.censor = TRUE
     )$Data
 
@@ -261,23 +241,24 @@ MC_changepoint_test <- function(config) {
 
     cl <- parallel::makeCluster(ncore)
 
-    parallel::clusterEvalQ(cl, {
-      source("E:/BNU/BA4/毕业论文/LTRC-changepoint/data/TimeindepLTRC_gnrt_ChangepointPH.R")
-      source("E:/BNU/BA4/毕业论文/LTRC-changepoint/estimation/estimate.R")
-      source("E:/BNU/BA4/毕业论文/LTRC-changepoint/code/MC.R")
-      source("E:/BNU/BA4/毕业论文/LTRC-changepoint/code/config.R")
-      source("E:/BNU/BA4/毕业论文/LTRC-changepoint/code/save.R")
-      setwd("E:/BNU/BA4/毕业论文/LTRC-changepoint/")
-      source("E:/BNU/BA4/毕业论文/LTRC-changepoint/estimation/plot_baseline.R")
-      source("E:/BNU/BA4/毕业论文/LTRC-changepoint/test/hypothesis_test.R")
-      source("E:/BNU/BA4/毕业论文/LTRC-changepoint/code/config.R")
-    })
+    project_dir <- config$project_dir
 
     parallel::clusterExport(
       cl,
-      varlist = c("config"),
+      varlist = c("config", "project_dir"),
       envir = environment()
     )
+
+    parallel::clusterEvalQ(cl, {
+      source(file.path(project_dir, "data/TimeindepLTRC_gnrt_ChangepointPH.R"))
+      source(file.path(project_dir, "estimation/estimate.R"))
+      source(file.path(project_dir, "main/MC.R"))
+      source(file.path(project_dir, "main/config.R"))
+      source(file.path(project_dir, "main/save.R"))
+      setwd(project_dir)
+      source(file.path(project_dir, "estimation/plot_baseline.R"))
+      source(file.path(project_dir, "test/hypothesis_test.R"))
+    })
 
     res_list <- parallel::parLapply(cl, 1:B_mc, one_run)
 

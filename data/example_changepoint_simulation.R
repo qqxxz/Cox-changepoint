@@ -3,17 +3,17 @@
 # 基于 TimeindepLTRC_gnrt_ChangepointPH.R
 ############################################################
 
-source("E:/BNU/BA4/毕业论文/code/【danqi】ltrc-changepoint-main/data/TimeindepLTRC_gnrt_ChangepointPH.R")
+source("E:/BNU/BA4/Cox-changepoint/code/data/TimeindepLTRC_gnrt_ChangepointPH.R")
 # 参数设置
 eta = 2  # 变点参数
-Beta = c(-1, 1.5, 0.5)  # 变点前的回归系数 (β₀, β₁, β₂)
-Gamma = c(0, 0, 0)  # 变点后的效应变化量（可根据需要调整）
+Beta = c(-1)  # 变点前的回归系数 β₁
+Gamma = c(0, 0)  # 变点后的效应变化量 (γ₀, γ₁)
 
 # 协变量分布
-x1.mean = 2
-x1.sd = 1.5
-x2.mean = 0
-x2.sd = 1
+u.mean = 2
+u.sd = 1.5
+x1.mean = 0
+x1.sd = 1
 
 # 实验设计
 sample_sizes = c(300, 500)
@@ -55,10 +55,10 @@ result1 = TimeindepLTRC_gnrt_ChangepointPH(
   Gamma = Gamma,
   truncation.percent = 0.1,
   censor.percent = 0.2,
+  u.mean = u.mean,
+  u.sd = u.sd,
   x1.mean = x1.mean,
   x1.sd = x1.sd,
-  x2.mean = x2.mean,
-  x2.sd = x2.sd,
   weibull.shape = 0.5,
   adjust.censor = TRUE
 )
@@ -80,8 +80,8 @@ run_simulation_batch = function(n_sim = 100,
                                 truncation.percent = 0.1,
                                 censor.percent = 0.2,
                                 eta = 2,
-                                Beta = c(-1, 1.5, 0.5),
-                                Gamma = c(0, 0, 0)){
+                                Beta = c(-1),
+                                Gamma = c(0, 0)){
   # 运行n_sim次模拟实验
   results = list()
   

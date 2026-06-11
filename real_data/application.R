@@ -1,11 +1,11 @@
-source("E:/BNU/BA4/毕业论文/LTRC-changepoint/data/TimeindepLTRC_gnrt_ChangepointPH.R")
-source("E:/BNU/BA4/毕业论文/LTRC-changepoint/estimation/estimate.R")
-source("E:/BNU/BA4/毕业论文/LTRC-changepoint/code/MC.R")
-source("E:/BNU/BA4/毕业论文/LTRC-changepoint/code/config.R")
-source("E:/BNU/BA4/毕业论文/LTRC-changepoint/code/save.R")
-setwd("E:/BNU/BA4/毕业论文/LTRC-changepoint")
-source("E:/BNU/BA4/毕业论文/LTRC-changepoint/estimation/plot_baseline.R")
-source("E:/BNU/BA4/毕业论文/LTRC-changepoint/test/hypothesis_test.R")
+source("E:/BNU/BA4/Cox-changepoint/code/data/TimeindepLTRC_gnrt_ChangepointPH.R")
+source("E:/BNU/BA4/Cox-changepoint/code/estimation/estimate.R")
+source("E:/BNU/BA4/Cox-changepoint/code/main/MC.R")
+source("E:/BNU/BA4/Cox-changepoint/code/main/config.R")
+source("E:/BNU/BA4/Cox-changepoint/code/main/save.R")
+setwd("E:/BNU/BA4/Cox-changepoint/code")
+source("E:/BNU/BA4/Cox-changepoint/code/estimation/plot_baseline.R")
+source("E:/BNU/BA4/Cox-changepoint/code/test/hypothesis_test.R")
 
 ## ----------------1. 读取 Stanford Heart Transplant 数据-----------
 library(survival)
@@ -60,20 +60,22 @@ dat_raw$Event <- dat_raw$event
 dat_raw$Start <- dat_raw$start
 dat_raw$Stop  <- dat_raw$stop
 
-# 变点变量 X1 = 年龄（标准化）
-dat_raw$X1 <- as.numeric(dat_raw$age)
+# 变点协变量 U = 年龄
+dat_raw$U <- as.numeric(dat_raw$age)
 
-# 协变量 X2 = 是否移植
+# 回归协变量 X1 = 年龄，X2 = 是否移植
+dat_raw$X1 <- as.numeric(dat_raw$age)
 dat_raw$X2 <- as.numeric(as.character(dat_raw$transplant))
 
 # 最终分析数据
-data_input <- dat_raw[, c("Start", "Stop", "Event", "X1", "X2")]
+data_input <- dat_raw[, c("Start", "Stop", "Event", "U", "X1", "X2")]
 
 # 清理异常值
 data_input <- subset(
   data_input,
   is.finite(Start) & is.finite(Stop) &
-    is.finite(Event) & is.finite(X1) &
+    is.finite(Event) & is.finite(U) &
+    is.finite(X1) &
     is.finite(X2) &
     Stop > Start
 )
@@ -94,11 +96,7 @@ AIC(cox_fit)
 ## -------------------4. 拟合我的模型（两个变量）-----------------
 p <- 2
 
-# 选择最优分割点
-knots <- select_knots(data_input, p = 2)
-
-# 拟合模型
-fit_empirical <- fit_piecewise(data_input, p = p, knots = knots)
+fit_empirical <- select_knots(data_input, p = p, hessian = TRUE)
 
 # p值
 library(MASS)
@@ -114,18 +112,17 @@ CI_upper <- est + 1.96 * se
 
 cat("========== 模型拟合结果 ==========\n")
 cat("eta =", fit_empirical$eta, "\n")
-cat("knots =", paste(round(fit_empirical$knots, 4), collapse = ", "), "\n")
+cat("k =", fit_empirical$k, "\n")
 cat("beta =", paste(round(fit_empirical$beta, 4), collapse = ", "), "\n")
 cat("gamma =", paste(round(fit_empirical$gamma, 4), collapse = ", "), "\n")
-cat("b =", paste(round(fit_empirical$b, 4), collapse = ", "), "\n")
-cat("a =", paste(round(fit_empirical$a, 4), collapse = ", "), "\n")
+cat("xi =", paste(round(fit_empirical$xi, 4), collapse = ", "), "\n")
 cat("logLik =", round(fit_empirical$logLik, 4), "\n")
-cat("AIC =", round(fit_empirical$AIC, 4), "\n")
+cat("BIC =", round(fit_empirical$BIC, 4), "\n")
 
 param_names <- c(
   paste0("beta",1:p),
-  paste0("gamma",1:p),
-  paste0("logb",1:(length(knots)-1))
+  paste0("gamma",0:p),
+  paste0("sqrt_xi",1:fit_empirical$K)
 )
 
 result_table <- data.frame(
@@ -161,7 +158,7 @@ cp_crit_2 <- as.numeric(cp_test_2$crit) # 临界值
 cp_reject_2 <- cp_test_2$SUP_obs > cp_crit_2
 
 cat("\n========== 变点存在性检验（两变量模型，SUP 置换）==========\n")
-cat("H0: 无变点（γ=0）；变点协变量 X1 在置换下可交换\n")
+cat("H0: 无变点（γ=0）；变点协变量 U 在置换下可交换\n")
 cat("SUP_obs =", round(cp_test_2$SUP_obs, 6), "\n")
 cat("置换 p 值 Pr(T_perm >= SUP_obs) =", round(cp_pval_2, 6), "\n")
 cat("临界值 alpha=0.05 =", round(cp_crit_2, 6), "\n")
@@ -209,33 +206,19 @@ cat("变点（真实年龄）eta_real_age =", round(eta_real_age, 4), "\n")
 
 ## --------------6. 作图：估计的基准累积风险函数与基准生存函数--------------
 plot_empirical_baseline <- function(fit_result, data_input) {
-  b <- fit_result$b
-  knots <- fit_result$knots
-  
-  t_min <- min(data_input$Start, na.rm = TRUE)
-  t_max <- max(data_input$Stop, na.rm = TRUE)
-  tgrid <- seq(t_min, t_max, length.out = 400)
-  
-  H_hat <- M0(tgrid, b, knots) # 计算基准累积风险函数 
-  S_hat <- exp(-H_hat) # 计算基准生存函数
-  
+  xi <- fit_result$xi
+  sp <- fit_result$sp
+  tgrid <- seq(min(data_input$Start), max(data_input$Stop), length.out = 400)
+  H_hat <- M0(tgrid, xi, sp)
+  S_hat <- exp(-H_hat)
   oldpar <- par(no.readonly = TRUE)
   par(mfrow = c(1, 2))
-  
-  plot(
-    tgrid, H_hat, type = "l", lwd = 2,
-    xlab = "Age", ylab = expression(hat(H)[0](t)),
-    main = "Estimated Baseline Cumulative Hazard"
-  )
-  abline(v = knots, lty = 2)
-  
-  plot(
-    tgrid, S_hat, type = "l", lwd = 2,
-    xlab = "Age", ylab = expression(hat(S)[0](t)),
-    main = "Estimated Baseline Survival"
-  )
-  abline(v = knots, lty = 2)
-  
+  plot(tgrid, H_hat, type = "l", lwd = 2,
+       xlab = "Age", ylab = expression(hat(H)[0](t)),
+       main = "Estimated Baseline Cumulative Hazard")
+  plot(tgrid, S_hat, type = "l", lwd = 2,
+       xlab = "Age", ylab = expression(hat(S)[0](t)),
+       main = "Estimated Baseline Survival")
   par(oldpar)
 }
 
@@ -243,21 +226,17 @@ plot_empirical_baseline(fit_empirical, data_input)
 
 ## --------------7. profile likelihood for eta-----------------
 # 绘制 eta 和 negloglik 的关系图，显示 profile likelihood 曲线
-profile_eta_curve <- function(data, knots, p) {
-  eta_grid <- get_eta_grid(data)  # 获取候选的 eta 网格
-  obj_vals <- rep(NA, length(eta_grid))  # 初始化存储负对数似然值的向量
-  
+profile_eta_curve <- function(data, sp, p) {
+  eta_grid <- get_eta_grid(data)
+  obj_vals <- rep(NA, length(eta_grid))
   for (i in seq_along(eta_grid)) {
-    fit_i <- fit_given_eta(data, knots, p, eta_grid[i])  # 给定 eta 拟合模型
-    if (!is.null(fit_i)) {
-      obj_vals[i] <- fit_i$value  # 存储负对数似然值
-    }
+    fit_i <- fit_given_eta(data, sp, p, eta_grid[i])
+    if (!is.null(fit_i)) obj_vals[i] <- fit_i$value
   }
-  
-  data.frame(eta = eta_grid, negloglik = obj_vals)  # 返回 eta 和对应的负对数似然值
+  data.frame(eta = eta_grid, negloglik = obj_vals)
 }
 
-prof_df <- profile_eta_curve(data_input, fit_empirical$knots, p = 2)
+prof_df <- profile_eta_curve(data_input, fit_empirical$sp, p = 2)
 
 plot(
   prof_df$eta, prof_df$negloglik,
@@ -291,27 +270,26 @@ dev.off()
 library(MASS)
 
 # 还原真实年龄
-data_input$age_centered <- data_input$X1 * age_sd + age_mean
+data_input$age_centered <- data_input$U
 data_input$age_real <- data_input$age_centered + 48
 
 # 在给定 theta=(beta,gamma,log b) 与固定 eta 下，计算各组平均生存曲线（一列一组）
-.mean_surv_by_groups <- function(theta, eta, knots, tgrid, group_data_list, vars, p) {
-  K <- length(theta) - 2 * p
+.mean_surv_by_groups <- function(theta, eta, sp, tgrid, group_data_list, vars, p) {
+  n_basis <- sp$p
   beta <- theta[1:p]
-  gamma <- theta[(p + 1):(2 * p)]
-  theta_b <- theta[(2 * p + 1):(2 * p + K)]
-  b <- exp(theta_b)
+  gamma <- theta[(p + 1):(2 * p + 1)]
+  xi <- theta[(2 * p + 2):(2 * p + 1 + n_basis)]^2
   n_g <- length(group_data_list)
   S_mat <- matrix(NA_real_, nrow = length(tgrid), ncol = n_g)
   for (k in seq_len(n_g)) {
     group_data <- group_data_list[[k]]
     if (nrow(group_data) == 0L) next
     X <- as.matrix(group_data[, vars, drop = FALSE])
-    ind <- as.numeric(group_data$X1 > eta)
-    psi <- as.vector(X %*% beta + (X %*% gamma) * ind)
-    psi <- pmin(pmax(psi, -20), 20)
+    Xt <- cbind(1, X)
+    ind <- as.numeric(group_data$U > eta)
+    psi <- pmin(pmax(as.vector(X %*% beta + (Xt %*% gamma) * ind), -20), 20)
     S_mat[, k] <- colMeans(sapply(tgrid, function(t) {
-      exp(-M0(t, b, knots) * exp(psi)) # 计算生存函数
+      exp(-M0(t, xi, sp) * exp(psi))
     }))
   }
   S_mat
@@ -339,7 +317,7 @@ model_mean_survival <- function(
 ) {
   p <- length(fit_result$beta)
   eta <- fit_result$eta
-  knots <- fit_result$knots
+  sp <- fit_result$sp
   vars <- paste0("X", seq_len(p))
   if (!"age_real" %in% names(data_input)) {
     stop("data_input 需包含列 age_real（请先按 age_centered、age_real 还原）")
@@ -352,7 +330,7 @@ model_mean_survival <- function(
   tgrid <- seq(t_min, t_max, length.out = 400) # 构造时间轴
   n_g <- length(group_data_list)
   par_hat <- fit_result$optim$par
-  S_mat <- .mean_surv_by_groups(par_hat, eta, knots, tgrid, group_data_list, vars, p) # 计算生存函数
+  S_mat <- .mean_surv_by_groups(par_hat, eta, sp, tgrid, group_data_list, vars, p)
   lo <- hi <- NULL
   if (isTRUE(ci) && !is.null(fit_result$optim$hessian)) {
     H <- fit_result$optim$hessian
@@ -375,7 +353,7 @@ model_mean_survival <- function(
           S_arr <- array(NA_real_, dim = c(length(tgrid), n_g, ci_boot))
           for (bb in seq_len(ci_boot)) { # 每组参数计算生存曲线
             S_arr[, , bb] <- .mean_surv_by_groups(
-              draws[bb, ], eta, knots, tgrid, group_data_list, vars, p
+              draws[bb, ], eta, sp, tgrid, group_data_list, vars, p
             )
           }
           for (k in seq_len(n_g)) { # 对每个时间点t求上下界
@@ -574,22 +552,23 @@ dat_raw$Event <- dat_raw$event
 dat_raw$Start <- dat_raw$start
 dat_raw$Stop  <- dat_raw$stop
 
-# 变点变量 X1 = 年龄（标准化）
-dat_raw$X1 <- as.numeric(scale(dat_raw$age))
+# 变点协变量 U = 年龄（标准化）
+dat_raw$U <- as.numeric(scale(dat_raw$age))
 
-# 协变量 X2 = 是否移植
+# 回归协变量
+dat_raw$X1 <- as.numeric(scale(dat_raw$age))
 dat_raw$X2 <- as.numeric(as.character(dat_raw$transplant))
-# 协变量 X3 = 既往搭桥手术情况
 dat_raw$X3 <- as.numeric(as.character(dat_raw$surgery))
 
 # 最终分析数据
-data_input <- dat_raw[, c("Start", "Stop", "Event", "X1", "X2","X3")]
+data_input <- dat_raw[, c("Start", "Stop", "Event", "U", "X1", "X2", "X3")]
 
 # 清理异常值
 data_input <- subset(
   data_input,
   is.finite(Start) & is.finite(Stop) &
-    is.finite(Event) & is.finite(X1) &
+    is.finite(Event) & is.finite(U) &
+    is.finite(X1) &
     is.finite(X2)  &
     is.finite(X3) &
     Stop > Start
@@ -610,10 +589,7 @@ summary(cox_fit)
 p <- 3
 
 # 选择最优分割点
-knots <- select_knots(data_input, p = 3)
-
-# 拟合模型
-fit_empirical <- fit_piecewise(data_input, p = p, knots = knots)
+fit_empirical <- select_knots(data_input, p = p, hessian = TRUE)
 
 # p值
 library(MASS)
@@ -629,18 +605,17 @@ CI_upper <- est + 1.96 * se
 
 cat("========== 模型拟合结果 ==========\n")
 cat("eta =", fit_empirical$eta, "\n")
-cat("knots =", paste(round(fit_empirical$knots, 4), collapse = ", "), "\n")
+cat("k =", fit_empirical$k, "\n")
 cat("beta =", paste(round(fit_empirical$beta, 4), collapse = ", "), "\n")
 cat("gamma =", paste(round(fit_empirical$gamma, 4), collapse = ", "), "\n")
-cat("b =", paste(round(fit_empirical$b, 4), collapse = ", "), "\n")
-cat("a =", paste(round(fit_empirical$a, 4), collapse = ", "), "\n")
+cat("xi =", paste(round(fit_empirical$xi, 4), collapse = ", "), "\n")
 cat("logLik =", round(fit_empirical$logLik, 4), "\n")
-cat("AIC =", round(fit_empirical$AIC, 4), "\n")
+cat("BIC =", round(fit_empirical$BIC, 4), "\n")
 
 param_names <- c(
   paste0("beta",1:p),
-  paste0("gamma",1:p),
-  paste0("logb",1:(length(knots)-1))
+  paste0("gamma",0:p),
+  paste0("sqrt_xi",1:fit_empirical$K)
 )
 
 result_table <- data.frame(
@@ -676,7 +651,7 @@ cp_crit_3 <- as.numeric(cp_test_3$crit)
 cp_reject_3 <- cp_test_3$SUP_obs > cp_crit_3
 
 cat("\n========== 变点存在性检验（三变量模型，SUP 置换）==========\n")
-cat("H0: 无变点（γ=0）；变点协变量 X1 在置换下可交换\n")
+cat("H0: 无变点（γ=0）；变点协变量 U 在置换下可交换\n")
 cat("SUP_obs =", round(cp_test_3$SUP_obs, 6), "\n")
 cat("置换 p 值 Pr(T_perm >= SUP_obs) =", round(cp_pval_3, 6), "\n")
 cat("临界值 alpha=0.05 =", round(cp_crit_3, 6), "\n")
@@ -723,38 +698,24 @@ cat("变点（进入年龄原始尺度）eta_age =", round(eta_age, 4), "\n")
 cat("变点（真实年龄）eta_real_age =", round(eta_real_age, 4), "\n")
 
 # 还原真实年龄（与第 8 节一致，供 plot_group_km / plot_km_age_transplant）
-data_input$age_centered <- data_input$X1 * age_sd + age_mean
+data_input$age_centered <- data_input$U * age_sd + age_mean
 data_input$age_real <- data_input$age_centered + 48
 
 ## ---------------6. 作图：估计的基准累积风险函数与基准生存函数-------------
 plot_empirical_baseline <- function(fit_result, data_input) {
-  b <- fit_result$b
-  knots <- fit_result$knots
-  
-  t_min <- min(data_input$Start, na.rm = TRUE)
-  t_max <- max(data_input$Stop, na.rm = TRUE)
-  tgrid <- seq(t_min, t_max, length.out = 400)
-  
-  H_hat <- M0(tgrid, b, knots) # 计算基准累积风险函数 
-  S_hat <- exp(-H_hat) # 计算基准生存函数
-  
+  xi <- fit_result$xi
+  sp <- fit_result$sp
+  tgrid <- seq(min(data_input$Start), max(data_input$Stop), length.out = 400)
+  H_hat <- M0(tgrid, xi, sp)
+  S_hat <- exp(-H_hat)
   oldpar <- par(no.readonly = TRUE)
   par(mfrow = c(1, 2))
-  
-  plot(
-    tgrid, H_hat, type = "l", lwd = 2,
-    xlab = "Age", ylab = expression(hat(H)[0](t)),
-    main = "Estimated Baseline Cumulative Hazard"
-  )
-  abline(v = knots, lty = 2)
-  
-  plot(
-    tgrid, S_hat, type = "l", lwd = 2,
-    xlab = "Age", ylab = expression(hat(S)[0](t)),
-    main = "Estimated Baseline Survival"
-  )
-  abline(v = knots, lty = 2)
-  
+  plot(tgrid, H_hat, type = "l", lwd = 2,
+       xlab = "Age", ylab = expression(hat(H)[0](t)),
+       main = "Estimated Baseline Cumulative Hazard")
+  plot(tgrid, S_hat, type = "l", lwd = 2,
+       xlab = "Age", ylab = expression(hat(S)[0](t)),
+       main = "Estimated Baseline Survival")
   par(oldpar)
 }
 
@@ -762,21 +723,17 @@ plot_empirical_baseline(fit_empirical, data_input)
 
 ## ----------------7. profile likelihood for eta---------------
 # 绘制 eta 和 negloglik 的关系图，显示 profile likelihood 曲线
-profile_eta_curve <- function(data, knots, p) {
-  eta_grid <- get_eta_grid(data)  # 获取候选的 eta 网格
-  obj_vals <- rep(NA, length(eta_grid))  # 初始化存储负对数似然值的向量
-  
+profile_eta_curve <- function(data, sp, p) {
+  eta_grid <- get_eta_grid(data)
+  obj_vals <- rep(NA, length(eta_grid))
   for (i in seq_along(eta_grid)) {
-    fit_i <- fit_given_eta(data, knots, p, eta_grid[i])  # 给定 eta 拟合模型
-    if (!is.null(fit_i)) {
-      obj_vals[i] <- fit_i$value  # 存储负对数似然值
-    }
+    fit_i <- fit_given_eta(data, sp, p, eta_grid[i])
+    if (!is.null(fit_i)) obj_vals[i] <- fit_i$value
   }
-  
-  data.frame(eta = eta_grid, negloglik = obj_vals)  # 返回 eta 和对应的负对数似然值
+  data.frame(eta = eta_grid, negloglik = obj_vals)
 }
 
-prof_df <- profile_eta_curve(data_input, fit_empirical$knots, p = 3)
+prof_df <- profile_eta_curve(data_input, fit_empirical$sp, p = 3)
 
 plot(
   prof_df$eta, prof_df$negloglik,

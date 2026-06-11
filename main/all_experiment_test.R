@@ -1,12 +1,12 @@
-source("E:/BNU/BA4/毕业论文/LTRC-changepoint/data/TimeindepLTRC_gnrt_ChangepointPH.R")
-source("E:/BNU/BA4/毕业论文/LTRC-changepoint/estimation/estimate.R")
-source("E:/BNU/BA4/毕业论文/LTRC-changepoint/code/MC.R")
-source("E:/BNU/BA4/毕业论文/LTRC-changepoint/code/config.R")
-source("E:/BNU/BA4/毕业论文/LTRC-changepoint/code/save.R")
-setwd("E:/BNU/BA4/毕业论文/LTRC-changepoint/")
-source("E:/BNU/BA4/毕业论文/LTRC-changepoint/estimation/plot_baseline.R")
-source("E:/BNU/BA4/毕业论文/LTRC-changepoint/test/hypothesis_test.R")
-source("E:/BNU/BA4/毕业论文/LTRC-changepoint/code/config.R")
+source("E:/BNU/BA4/Cox-changepoint/code/data/TimeindepLTRC_gnrt_ChangepointPH.R")
+source("E:/BNU/BA4/Cox-changepoint/code/estimation/estimate.R")
+source("E:/BNU/BA4/Cox-changepoint/code/main/MC.R")
+source("E:/BNU/BA4/Cox-changepoint/code/main/config.R")
+source("E:/BNU/BA4/Cox-changepoint/code/main/save.R")
+setwd("E:/BNU/BA4/Cox-changepoint/code")
+source("E:/BNU/BA4/Cox-changepoint/code/estimation/plot_baseline.R")
+source("E:/BNU/BA4/Cox-changepoint/code/test/hypothesis_test.R")
+source("E:/BNU/BA4/Cox-changepoint/code/main/config.R")
 
 library(openxlsx)
 
@@ -39,7 +39,7 @@ for(i in 1:nrow(param_grid)) {
 
   # Power (Gamma = 非零)
   SIM_CONFIG$test_id <- 1
-  res_power <- run_MC_test(SIM_CONFIG, gamma_vec=c(0.9,0.5), out_dir=out_dir)
+  res_power <- run_MC_test(SIM_CONFIG, gamma_vec=c(0.5,0.9), out_dir=out_dir)
   
   # 保存汇总
   all_results[[i]] <- list(

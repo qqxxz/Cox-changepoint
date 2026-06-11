@@ -1,8 +1,8 @@
 ################################ Description ########################################################
 # This function generates dataset with time-fixed covariates for changepoint Cox PH model
 # 生成时间不变协变量的变点Cox比例风险模型数据集
-# 变点模型: h(t|x) = h₀(t)exp(β'x + γ'x̃·I(x₁>η))
-# 其中 x₁ 是变点协变量，η 是变点参数
+# 变点模型: h(t|W) = h₀(t)exp(β'X + γ'X̃·I(U>η))
+# 其中 W=(X',U)'，X̃=(1,X')，U 为变点协变量，η 为变点参数
 
 # 使用方法示例:
 # result = TimeindepLTRC_gnrt_ChangepointPH(N=300, Distribution="WI", 
@@ -10,54 +10,49 @@
 #####################################################################################################
 
 # 根据协变量、分布类型和模型参数生成生存时间（Time）和风险水平（Xi）
-# 变点Cox模型：h(t|x) = h₀(t)exp(β'x + γ'x̃·I(x₁>η))
+# 变点Cox模型：h(t|W) = h₀(t)exp(β'X + γ'X̃·I(U>η))
 Time_gnrt_ChangepointPH <- function(data, Distribution, Coeff, eta){
-  x1 = data$X1  # 变点协变量
-  x2 = data$X2  # 回归协变量
-  u = data$U    # 均匀随机数
-  
-  # 提取参数
-  Beta = Coeff$Beta  # 变点前的回归系数 (β₁, β₂)
-  Gamma = Coeff$Gamma  # 变点后的效应变化量 (γ₁, γ₂)
+  u_cp = data$U        # 变点协变量 U
+  x1 = data$X1         # 回归协变量 X1
+  u_rand = data$U_rand # 均匀随机数
+
+  Beta = Coeff$Beta
+  Gamma = Coeff$Gamma
   Lambda = Coeff$Lambda
-  V = Coeff$V  # Weibull形状参数
-  Alpha = Coeff$Alpha  # Gompertz参数
-  
-  # 构建设计向量 x = (x₁, x₂) 和 x̃ = (1, x₂)
-  x_vec = c(x1, x2)
-  x_tilde = c(x2,1)
-  
-  # 计算风险函数的参数部分
-  # Param = exp(β'x + γ'x̃·I(x₁>η))
-  if (x1 > eta) {
+  V = Coeff$V
+  Alpha = Coeff$Alpha
+
+  x_vec = x1
+  x_tilde = c(1, x1)
+
+  if (u_cp > eta) {
     Param = exp(sum(Beta * x_vec) + sum(Gamma * x_tilde))
   } else {
     Param = exp(sum(Beta * x_vec))
   }
-  
-  # 根据分布类型生成生存时间
+
   if (Distribution == "Exp"){
     # 指数分布: S(t) = exp(-λt·Param)
-    TT = -log(u) / Lambda / Param
+    TT = -log(u_rand) / Lambda / Param
   } else if (Distribution == "WD"){
     # Weibull递减风险: S(t) = exp(-λt^V·Param)
-    TT = (-log(u) / Lambda / Param)^(1/V)
+    TT = (-log(u_rand) / Lambda / Param)^(1/V)
   } else if (Distribution == "WI"){
     # Weibull递增风险: S(t) = exp(-λt^V·Param)
-    TT = (-log(u) / Lambda / Param)^(1/V)
+    TT = (-log(u_rand) / Lambda / Param)^(1/V)
   } else if (Distribution == "Gtz"){
-    # Gompertz分布
-    TT = Alpha * (-log(u)) / Lambda / Param
+     # Gompertz分布
+    TT = Alpha * (-log(u_rand)) / Lambda / Param
     TT = log(TT + 1) / Alpha
   } else if (Distribution == "Quadratic"){
     # 累积基线风险为时间的二次函数: Λ₀(t) = a·t²
     a = Coeff$a
-    TT = sqrt(-log(u) / a / Param)
+    TT = sqrt(-log(u_rand) / a / Param)
   } else if (Distribution == "QuadraticLinear") {
     # Λ0(t) = a t^2 + b t
     a = Coeff$a
     b = Coeff$b
-    H = -log(u) / Param
+    H = -log(u_rand) / Param
     D = b^2 + 4 * a * H
     TT = (-b + sqrt(D)) / (2 * a)
     } else if (Distribution == "PiecewiseWeibull"){
@@ -67,9 +62,9 @@ Time_gnrt_ChangepointPH <- function(data, Distribution, Coeff, eta){
     alpha2 = Coeff$alpha2
     lambda2 = Coeff$lambda2
     t_star = Coeff$t_star
-    
-    H = -log(u) / Param
-    
+
+    H = -log(u_rand) / Param
+
     if (H < lambda1 * t_star^alpha1) {
       TT = (H / lambda1)^(1/alpha1)
     } else {
@@ -80,7 +75,7 @@ Time_gnrt_ChangepointPH <- function(data, Distribution, Coeff, eta){
   } else {
     stop("Wrong distribution is given.")
   }
-  
+
   result = list(Time = TT, Xi = Param)
   return(result)
 }
@@ -219,20 +214,20 @@ adjust_censor_rate <- function(target_rate, Data, censor.func){
 TimeindepLTRC_gnrt_ChangepointPH <- function(N = 300, 
                                              Distribution = c("Exp", "WI", "WD", "Gtz", "Quadratic","QuadraticLinear", "PiecewiseWeibull"), 
                                              eta = 2,  # 变点参数
-                                             Beta = c(1.5, 0.5),  # 变点前的回归系数 (β₀, β₁, β₂)
+                                             Beta = c(0.5),  # 变点前的回归系数 (β₁, β₂)
                                              Gamma = c(0, 0),  # 变点后的效应变化量 (γ₀, γ₁, γ₂)
                                              truncation.percent = 0.1,  # 左截断百分比 (10% 或 30%)
                                              censor.percent = 0.2,  # 右删失百分比 (20% 或 40%)
-                                             x1.mean = 2,  # 变点协变量x₁的均值
-                                             x1.sd = 1.5,  # 变点协变量x₁的标准差
-                                             x2.mean = 0,  # 回归协变量x₂的均值
-                                             x2.sd = 1,    # 回归协变量x₂的标准差
+                                             u.mean = 2,   # 变点协变量 U 的均值
+                                             u.sd = 1.5,   # 变点协变量 U 的标准差
+                                             x1.mean = 0,  # 回归协变量 X1 的均值
+                                             x1.sd = 1,    # 回归协变量 X1 的标准差
                                              weibull.shape = 0.5,  # Weibull形状参数 (0.5 或 3.0)
                                              adjust.censor = TRUE){  # 是否调整删失参数以达到目标删失率
   
   # 初始化数据框
-  Data <- as.data.frame(matrix(NA, N * 3, 10))  # 生成更多样本以应对左截断筛选
-  names(Data) <- c("I", "ID", "X1", "X2", "Start", "Stop", "C", "Event", "Y", "Xi")
+  Data <- as.data.frame(matrix(NA, N * 3, 10))
+  names(Data) <- c("I", "ID", "U", "X1", "Start", "Stop", "C", "Event", "Y", "Xi")
   Data$C <- 0
   Count = 0
   
@@ -289,21 +284,21 @@ TimeindepLTRC_gnrt_ChangepointPH <- function(N = 300,
   Coeff$Lambda = Lambda
   Coeff$V = V
   
-  # 预生成所有协变量
-  max_samples = N * 5  # 生成更多样本以应对左截断筛选
+  # 预生成协变量：U 为变点变量，X1 为回归协变量
+  max_samples = N * 5
+  u_all = rnorm(max_samples, mean = u.mean, sd = u.sd)
   x1_all = rnorm(max_samples, mean = x1.mean, sd = x1.sd)
-  x2_all = rnorm(max_samples, mean = x2.mean, sd = x2.sd)
   
   # 第一步：生成所有候选样本（不考虑左截断）
   candidate_data = list()
   candidate_times = numeric(max_samples)
   
   for(i in 1:max_samples){
-    data_temp = list(X1 = x1_all[i], X2 = x2_all[i], U = runif(1))
+    data_temp = list(U = u_all[i], X1 = x1_all[i], U_rand = runif(1))
     ret_temp = Time_gnrt_ChangepointPH(data = data_temp, Distribution = Distribution, 
                                       Coeff = Coeff, eta = eta)
     candidate_times[i] = ret_temp$Time
-    candidate_data[[i]] = list(X1 = x1_all[i], X2 = x2_all[i], 
+    candidate_data[[i]] = list(U = u_all[i], X1 = x1_all[i],
                                Time = ret_temp$Time, Xi = ret_temp$Xi)
   }
   
@@ -328,8 +323,8 @@ TimeindepLTRC_gnrt_ChangepointPH <- function(N = 300,
     # 生成左截断时间（在[0, truncation_threshold]范围内）
     L = runif(1, 0, truncation_threshold)
     
+    Data[i, "U"] = data_item$U
     Data[i, "X1"] = data_item$X1
-    Data[i, "X2"] = data_item$X2
     Data[i, "Start"] = L
     Data[i, "Y"] = data_item$Time
     Data[i, "Xi"] = data_item$Xi

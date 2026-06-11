@@ -1,16 +1,15 @@
-source("E:/BNU/BA4/毕业论文/LTRC-changepoint/data/TimeindepLTRC_gnrt_ChangepointPH.R")
-source("E:/BNU/BA4/毕业论文/LTRC-changepoint/estimation/estimate.R")
-source("E:/BNU/BA4/毕业论文/LTRC-changepoint/code/MC.R")
-source("E:/BNU/BA4/毕业论文/LTRC-changepoint/code/config.R")
-source("E:/BNU/BA4/毕业论文/LTRC-changepoint/code/save.R")
-setwd("E:/BNU/BA4/毕业论文/LTRC-changepoint")
-source("E:/BNU/BA4/毕业论文/LTRC-changepoint/estimation/plot_baseline.R")
-
+source("E:/BNU/BA4/Cox-changepoint/code/data/TimeindepLTRC_gnrt_ChangepointPH.R")
+source("E:/BNU/BA4/Cox-changepoint/code/estimation/estimate.R")
+source("E:/BNU/BA4/Cox-changepoint/code/main/MC.R")
+source("E:/BNU/BA4/Cox-changepoint/code/main/config.R")
+source("E:/BNU/BA4/Cox-changepoint/code/main/save.R")
+setwd("E:/BNU/BA4/Cox-changepoint/code")
+source("E:/BNU/BA4/Cox-changepoint/code/estimation/plot_baseline.R")
 
 # 参数组合
-n_list <- c(300, 500)
-trunc_list <- c(0.1, 0.3)
-censor_list <- c(0.2, 0.4)
+n_list <- c(300)
+trunc_list <- c(0.1)
+censor_list <- c(0.2)
 
 exp_grid <- expand.grid(
   n = n_list,
@@ -39,24 +38,16 @@ for(i in 1:nrow(exp_grid)) {
   # 运行仿真
   res <- run_simulation(SIM_CONFIG)
 
-  # 计算感兴趣参数索引
-  p <- SIM_CONFIG$p
-  K <- ncol(res$par_mat) - (2*p + 1)
-  idx_interest <- c(1:p, (p+1):(2*p), (2*p + K + 1))
-
-  par_mat_interest <- res$par_mat[, idx_interest]
-  # se_mat_interest  <- res$se_mat[, idx_interest]
+  # par_mat 列顺序: beta, gamma, eta（每次 rep 内 BIC 选结点，维度固定）
   true_par <- c(SIM_CONFIG$Beta, SIM_CONFIG$Gamma, SIM_CONFIG$eta)
-
-  # 统计总结
-  summary_res <- summary_MC(par_mat_interest,true_par)
+  summary_res <- summary_MC(res$par_mat, true_par)
 
   # 保存 Excel
   save_MC_to_excel(
     res        = res,
     config     = SIM_CONFIG,
     true_par   = true_par,
-    out_dir    = "E:/BNU/BA4/毕业论文/LTRC-changepoint/results",
+    out_dir    = "E:/BNU/BA4/Cox-changepoint/code/results",
     summary_df = summary_res
   )
 

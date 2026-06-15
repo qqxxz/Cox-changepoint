@@ -96,7 +96,8 @@ run_simulation <- function(config) {
       select_knots(
         dat, config$p,
         k_candidates = config$k_candidates,
-        od = config$spline_order
+        od = config$spline_order,
+        k_fixed = config$k_fixed
       ),
       error = function(e) {
         structure(list(error = conditionMessage(e)), class = "mc_failed")
@@ -108,6 +109,7 @@ run_simulation <- function(config) {
 
     list(
       par = c(fit$beta, fit$gamma, fit$eta),
+      se_par = fit$se_par,
       par_full = fit$par,
       k = fit$k,
       xi  = fit$xi,
@@ -180,6 +182,7 @@ run_simulation <- function(config) {
   }
 
   par_mat <- do.call(rbind, lapply(res_list, `[[`, "par"))
+  se_mat  <- do.call(rbind, lapply(res_list, `[[`, "se_par"))
   k_vec   <- vapply(res_list, `[[`, numeric(1), "k")
   AIE_SF_vec  <- sapply(res_list, `[[`, "AIE_SF")
   AIE_CHF_vec <- sapply(res_list, `[[`, "AIE_CHF")
@@ -197,6 +200,7 @@ run_simulation <- function(config) {
 
   list(
     par_mat = par_mat,
+    se_mat = se_mat,
     k_vec = k_vec,
     AIE_SF  = AIE_SF_vec,
     AIE_CHF = AIE_CHF_vec,
@@ -206,7 +210,7 @@ run_simulation <- function(config) {
 }
 
 ##################### 仿真统计量 #####################
-summary_MC <- function(par_mat, true_par) {
+summary_MC <- function(par_mat, true_par, se_mat = NULL) {
   stopifnot(ncol(par_mat) == length(true_par))
 
   est_mean <- colMeans(par_mat)
@@ -217,14 +221,19 @@ summary_MC <- function(par_mat, true_par) {
                                     byrow = TRUE))^2)
   see <- apply(par_mat, 2, sd)
 
+  if (is.null(se_mat)) {
+    se_mat <- matrix(see, nrow = nrow(par_mat), ncol = ncol(par_mat), byrow = TRUE)
+  }
+  ase <- colMeans(se_mat, na.rm = TRUE)
+
   CP95 <- CP99 <- rep(NA, ncol(par_mat))
-  for (j in 1:ncol(par_mat)) {
+  for (j in seq_len(ncol(par_mat))) {
     CP95[j] <- mean(
-      abs(par_mat[, j] - true_par[j]) <= qnorm(0.975) * see[j],
+      abs(par_mat[, j] - true_par[j]) <= qnorm(0.975) * se_mat[, j],
       na.rm = TRUE
     )
     CP99[j] <- mean(
-      abs(par_mat[, j] - true_par[j]) <= qnorm(0.995) * see[j],
+      abs(par_mat[, j] - true_par[j]) <= qnorm(0.995) * se_mat[, j],
       na.rm = TRUE
     )
   }
@@ -234,6 +243,7 @@ summary_MC <- function(par_mat, true_par) {
     Bias = bias,
     SSE = sse,
     SEE = see,
+    ASE = ase,
     CP95 = CP95,
     CP99 = CP99
   )

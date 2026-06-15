@@ -96,15 +96,17 @@ AIC(cox_fit)
 ## -------------------4. 拟合我的模型（两个变量）-----------------
 p <- 2
 
-fit_empirical <- select_knots(data_input, p = p, hessian = TRUE)
+fit_empirical <- select_knots(data_input, p = p)
 
-# p值
+# p值（三明治渐进方差）
 library(MASS)
-hessian <- fit_empirical$optim$hessian
-hessian <- (hessian + t(hessian)) / 2   # 强制对称
-cov_mat <- ginv(hessian)
-se <- sqrt(diag(cov_mat))
-est <- fit_empirical$par[1:length(se)]
+V <- fit_empirical$vcov
+if (is.null(V) || !all(is.finite(V))) stop("无法计算协方差矩阵")
+se <- c(sqrt(pmax(diag(V), 0)), fit_empirical$se_eta)
+est <- c(
+  fit_empirical$par[1:(2 * p + 1 + fit_empirical$K)],
+  fit_empirical$eta
+)
 z <- est / se
 p_value <- 2 * pnorm(-abs(z))
 CI_lower <- est - 1.96 * se
@@ -332,17 +334,13 @@ model_mean_survival <- function(
   par_hat <- fit_result$optim$par
   S_mat <- .mean_surv_by_groups(par_hat, eta, sp, tgrid, group_data_list, vars, p)
   lo <- hi <- NULL
-  if (isTRUE(ci) && !is.null(fit_result$optim$hessian)) {
-    H <- fit_result$optim$hessian
-    if (nrow(H) == length(par_hat) && ncol(H) == length(par_hat)) {
-      H <- (H + t(H)) / 2
-      cov_mat <- tryCatch(
-        ginv(H), # hessian矩阵的逆为协方差矩阵
-        error = function(e) NULL
-      )
+  if (isTRUE(ci)) {
+    V <- fit_result$vcov
+    if (!is.null(V) && nrow(V) == length(par_hat)) {
+      cov_mat <- V
       if (!is.null(cov_mat)) {
         draws <- tryCatch(
-          mvrnorm(ci_boot, par_hat, cov_mat), # 正态分布中采样，进行参数bootstrap
+          mvrnorm(ci_boot, par_hat, cov_mat),
           error = function(e) NULL
         )
         if (!is.null(draws)) {
@@ -589,15 +587,17 @@ summary(cox_fit)
 p <- 3
 
 # 选择最优分割点
-fit_empirical <- select_knots(data_input, p = p, hessian = TRUE)
+fit_empirical <- select_knots(data_input, p = p)
 
-# p值
+# p值（三明治渐进方差）
 library(MASS)
-hessian <- fit_empirical$optim$hessian
-hessian <- (hessian + t(hessian)) / 2   # 强制对称
-cov_mat <- ginv(hessian)
-se <- sqrt(diag(cov_mat))
-est <- fit_empirical$par[1:length(se)]
+V <- fit_empirical$vcov
+if (is.null(V) || !all(is.finite(V))) stop("无法计算协方差矩阵")
+se <- c(sqrt(pmax(diag(V), 0)), fit_empirical$se_eta)
+est <- c(
+  fit_empirical$par[1:(2 * p + 1 + fit_empirical$K)],
+  fit_empirical$eta
+)
 z <- est / se
 p_value <- 2 * pnorm(-abs(z))
 CI_lower <- est - 1.96 * se

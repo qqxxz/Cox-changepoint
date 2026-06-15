@@ -20,7 +20,7 @@ save_MC_to_excel <- function(res, config, true_par, out_dir, summary_df = NULL) 
 
   ## ===== summary sheet（论文主表）=====
   if (is.null(summary_df)) {
-    summary_df <- summary_MC(res$par_mat, true_par)
+    summary_df <- summary_MC(res$par_mat, true_par, res$se_mat)
   }
 
   addWorksheet(wb, "summary")
@@ -40,6 +40,11 @@ save_MC_to_excel <- function(res, config, true_par, out_dir, summary_df = NULL) 
   ## ===== par_mat sheet（beta, gamma, eta）=====
   addWorksheet(wb, "par_mat")
   writeData(wb, "par_mat", res$par_mat)
+
+  if (!is.null(res$se_mat)) {
+    addWorksheet(wb, "se_mat")
+    writeData(wb, "se_mat", res$se_mat)
+  }
 
   if (!is.null(res$k_vec)) {
     addWorksheet(wb, "k_selected")

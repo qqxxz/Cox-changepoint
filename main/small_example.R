@@ -17,7 +17,7 @@ true_par <- c(
   SIM_CONFIG$eta
 )
 
-summary_res <- summary_MC(res$par_mat, true_par)
+summary_res <- summary_MC(res$par_mat, true_par, res$se_mat)
 
 ## ================== 保存结果 ==================
 save_MC_to_excel(

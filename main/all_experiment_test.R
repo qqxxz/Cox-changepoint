@@ -1,0 +1,54 @@
+source("E:/BNU/BA4/Cox-changepoint/code/data/TimeindepLTRC_gnrt_ChangepointPH.R")
+source("E:/BNU/BA4/Cox-changepoint/code/estimation/estimate.R")
+source("E:/BNU/BA4/Cox-changepoint/code/main/MC.R")
+source("E:/BNU/BA4/Cox-changepoint/code/main/config.R")
+source("E:/BNU/BA4/Cox-changepoint/code/main/save.R")
+setwd("E:/BNU/BA4/Cox-changepoint/code")
+source("E:/BNU/BA4/Cox-changepoint/code/estimation/plot_baseline.R")
+source("E:/BNU/BA4/Cox-changepoint/code/test/hypothesis_test.R")
+
+library(openxlsx)
+
+param_grid <- expand.grid(
+  n = c(500),
+  truncation = c(0.3),
+  censor = c(0.2)
+)
+
+all_results <- list()
+out_dir <- "results_test/results3"
+dir.create(out_dir, showWarnings = FALSE)
+      
+for(i in 1:nrow(param_grid)) {
+
+  cat("=== Running parameter set", i, "of", nrow(param_grid), "===\n")
+  cat("n =", param_grid$n[i],
+      "truncation =", param_grid$truncation[i],
+      "censor =", param_grid$censor[i], "\n")
+
+  SIM_CONFIG$exp_id <- as.integer(10 * param_grid$truncation[i] +
+                                   100 * param_grid$censor[i])
+
+  SIM_CONFIG$n <- param_grid$n[i]
+  SIM_CONFIG$truncation <- param_grid$truncation[i]
+  SIM_CONFIG$censor <- param_grid$censor[i]
+
+  # Type I error (H0: γ = 0)
+  SIM_CONFIG$test_id <- 0
+  null_gamma <- rep(0, SIM_CONFIG$p + 1)
+  res_typeI <- run_MC_test(SIM_CONFIG, gamma_vec = null_gamma, out_dir = out_dir)
+
+  # Power (H0 不成立)
+  SIM_CONFIG$test_id <- 1
+  res_power <- run_MC_test(SIM_CONFIG, gamma_vec = SIM_CONFIG$Gamma, out_dir = out_dir)
+  
+  # 保存汇总
+  all_results[[i]] <- list(
+    config = SIM_CONFIG,
+    TypeI_Error = res_typeI$MC_res$Rejection_Rate,
+    Power = res_power$MC_res$Rejection_Rate,
+    pval_null = res_typeI$MC_res$p_value,
+    pval_alt  = res_power$MC_res$p_value,
+    Excel_files = c(res_typeI$file_XLSX, res_power$file_XLSX)
+  )
+}
